@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#F2F2F2">
+<meta name="robots" content="noindex, nofollow">
+<title>Demonstração · BI Gestão Sem Caos</title>
+<link rel="icon" href="./icone.svg">
+<link rel="apple-touch-icon" href="./icone-180.png">
+<style>
+  @font-face { font-family: "GSC Jakarta"; font-style: normal; font-display: swap; font-weight: 200 800; src: url(./assets/{{FONTE_LATIN}}) format("woff2-variations"); }
+  :root {
+    --laranja: #F24505; --laranja-medio: #F2752E; --pessego: #FCBA75; --azul: #334F73; --azul-escuro: #122940;
+    --preto: #141414; --cinza: #F2F2F2; --branco: #FFFFFF;
+    --gsc-fonte: "GSC Jakarta", "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: light;
+  }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--cinza); color: var(--azul-escuro); }
+  [hidden] { display: none !important; }
+
+  /* ── portão ── */
+  .gsc-portao { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; box-sizing: border-box; font-family: var(--gsc-fonte); }
+  .gsc-cartao { width: 100%; max-width: 360px; background: var(--branco); border-radius: 20px; padding: 28px 24px 22px; box-sizing: border-box;
+    box-shadow: 0 1px 2px rgba(18, 41, 64, .06), 0 12px 32px rgba(18, 41, 64, .08); }
+  .gsc-marca { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+  .gsc-marca svg { width: 36px; height: 36px; flex: none; }
+  .gsc-marca b { display: block; font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+  .gsc-marca span { display: block; font-size: 12px; color: var(--azul); margin-top: 1px; }
+  .gsc-cartao h1 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; margin: 0 0 4px; }
+  .gsc-cartao p.gsc-sub { font-size: 13px; line-height: 1.45; color: var(--azul); margin: 0 0 18px; }
+  .gsc-campo { display: block; margin-bottom: 12px; }
+  .gsc-campo span { display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; }
+  .gsc-campo input { width: 100%; box-sizing: border-box; font: 500 15px/1.2 var(--gsc-fonte); color: var(--azul-escuro); background: var(--cinza);
+    border: 1px solid transparent; border-radius: 10px; padding: 11px 12px; outline: none; transition: border-color .15s, background .15s; }
+  .gsc-campo input:focus { border-color: var(--laranja-medio); background: var(--branco); }
+  .gsc-botao { width: 100%; margin-top: 6px; font: 700 15px/1 var(--gsc-fonte); color: var(--preto); background: var(--laranja); border: 0; border-radius: 10px;
+    padding: 13px 14px; cursor: pointer; transition: filter .15s; }
+  .gsc-botao:hover { filter: brightness(1.06); }
+  .gsc-botao:disabled { opacity: .6; cursor: default; }
+  .gsc-botao:focus-visible, .gsc-faixa button:focus-visible { outline: 2px solid var(--azul-escuro); outline-offset: 2px; }
+  .gsc-erro { font-size: 13px; color: var(--laranja); margin: 4px 0 6px; font-weight: 600; }
+  .gsc-aviso { background: rgba(252, 186, 117, .28); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; font-size: 13px; line-height: 1.45; }
+  .gsc-aviso a { display: inline-block; margin-top: 6px; color: var(--azul-escuro); font-weight: 700; }
+  .gsc-rodape { margin: 16px 0 0; font-size: 11.5px; line-height: 1.45; color: var(--azul); text-align: center; }
+  .gsc-carregando { min-height: 100vh; display: grid; place-items: center; font: 500 13px var(--gsc-fonte); color: var(--azul); }
+
+  /* ── faixa discreta durante o uso ── */
+  .gsc-faixa {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 9999;
+    display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+    background: var(--azul-escuro); color: var(--branco); border-radius: 999px; padding: 4px 4px 4px 12px;
+    font: 500 12px/1.2 var(--gsc-fonte); box-shadow: 0 6px 20px rgba(20, 20, 20, .2);
+  }
+  .gsc-faixa i { width: 8px; height: 8px; border-radius: 50%; background: var(--laranja); }
+  .gsc-faixa button { font: 700 12px/1.2 var(--gsc-fonte); color: var(--preto); background: var(--pessego); border: 0; border-radius: 999px; padding: 5px 10px; cursor: pointer; }
+  .gsc-faixa button:hover { background: var(--branco); }
+  @media (max-width: 639px) {
+    .gsc-faixa { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); font-size: 11px; gap: 6px; padding-left: 10px; }
+  }
+</style>
+<script>window.__DEMO_APP = {{APP_JSON}};</script>
+<script src="./portao.js" charset="utf-8"></script>
+</head>
+<body>
+<div class="gsc-carregando" id="gsc-carregando">Carregando…</div>
+
+<main class="gsc-portao" id="gsc-portao" hidden>
+  <div class="gsc-cartao">
+    <div class="gsc-marca">
+      <svg viewBox="-128 0 1080 1080" aria-hidden="true"><rect x="-128" width="1080" height="1080" rx="300" fill="#122940"/><path fill="#F2752E" d="M 823.1 571.5 L 577.1 594.3 L 762.7 757.5 C 740.1 788.5 748.3 777.3 725.7 808.3 L 513.3 682.1 L 567.4 923.2 C 530.9 935.1 544.2 930.7 507.7 942.6 L 429.2 760.5 L 556.5 467.1 L 578.4 416.5 L 523.5 422.1 L 207.2 454.5 L 57.2 322.4 C 79.7 291.3 71.5 302.5 94.1 271.4 L 306.5 397.5 L 252.4 156.5 C 288.9 144.6 275.7 149 312.2 137.1 L 410 363.9 L 507.8 137.1 C 544.2 149.1 531.2 144.6 567.6 156.6 L 513.3 397.6 L 725.8 271.7 C 748.4 302.7 740.2 291.5 762.8 322.5 L 577.1 485.6 L 823.1 508.6 L 823.1 571.5"/><path fill="#FCBA75" d="M 240.3 483.5 L 0.1 508.2 L 0 571 L 246 594 L 32.9 780.2 L 69.8 831.1 L 309.8 681.9 L 255.6 922.8 L 315.3 942.3 L 411.7 719.8 L 526.9 454.1 L 240.3 483.5"/></svg>
+      <div><b>Gestão Sem Caos</b><span>Demonstração do BI</span></div>
+    </div>
+    <h1>Entrar na demonstração</h1>
+    <p class="gsc-sub">Use o login e a senha que a Gestão Sem Caos enviou para você.</p>
+
+    <div class="gsc-aviso" id="gsc-aviso" role="alert" hidden>
+      <span id="gsc-aviso-texto"></span><br>
+      <a id="gsc-aviso-zap" href="#" target="_blank" rel="noopener">Falar no WhatsApp</a>
+    </div>
+
+    <form id="gsc-form" novalidate>
+      <label class="gsc-campo"><span>Login</span>
+        <input id="gsc-login" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" required></label>
+      <label class="gsc-campo"><span>Senha</span>
+        <input id="gsc-senha" name="password" type="password" autocomplete="current-password" required></label>
+      <p class="gsc-erro" id="gsc-erro" role="alert" hidden></p>
+      <button class="gsc-botao" id="gsc-entrar" type="submit">Entrar</button>
+    </form>
+    <p class="gsc-rodape">Dados fictícios da Clínica Orvalho. O acesso tem validade e, a cada entrada, o BI volta às configurações padrão.</p>
+  </div>
+</main>
+
+<div id="raiz"></div>
+<div class="gsc-faixa" id="gsc-faixa" role="note" hidden><i></i>Demonstração · dados fictícios<button type="button" id="gsc-sair">Sair</button></div>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<meta name="theme-color" content="#f2f2f2">
+<title>BI Teste</title>
+<link rel="icon" href="./icone.svg">
+<link rel="apple-touch-icon" href="./icone-180.png">
+<style>
+  :root { --aviso-fundo: #13283f; --aviso-texto: #ffffff; --aviso-ponto: #f34405; color-scheme: light; }
+  html, body { margin: 0; padding: 0; }
+  body { background: #f2f2f2; color: #13283f; }
+  .aviso-teste {
+    position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 9999;
+    display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+    background: var(--aviso-fundo); color: var(--aviso-texto); border-radius: 999px; padding: 4px 4px 4px 12px;
+    font: 12px/1.2 "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,.2);
+  }
+  .aviso-teste i { width: 8px; height: 8px; border-radius: 50%; background: var(--aviso-ponto); }
+  .aviso-botao {
+    font: inherit; font-weight: 600; color: #ffffff; background: var(--aviso-ponto); border: 0; border-radius: 999px;
+    padding: 5px 10px; cursor: pointer;
+  }
+  .aviso-botao:hover { filter: brightness(1.08); }
+  .aviso-botao:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
+  /* no celular, centralizado e acima da barra de baixo */
+  @media (max-width: 639px) {
+    .aviso-teste { right: auto; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+    .aviso-teste { font-size: 11px; gap: 6px; padding-left: 10px; max-width: calc(100vw - 16px); }
+    .aviso-botao { padding: 5px 8px; }
+  }
+</style>
+<link rel="modulepreload" crossorigin href="./assets/react-C5-c3Gmo.js">
+<link rel="stylesheet" crossorigin href="./assets/index-CqHy2mts.css">
+<script src="./teste-dados.js" charset="utf-8"></script>
+<script src="./teste-metas.js" charset="utf-8"></script>
+<script src="./teste-perfil.js" charset="utf-8"></script>
+
+
+<div id="raiz"></div>
+<div class="aviso-teste" role="note"><i></i>Teste · dados fictícios</div>
+<script type="module" crossorigin src="./assets/index-IVLyBFO-.js"></script>
