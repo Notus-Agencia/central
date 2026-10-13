@@ -220,6 +220,13 @@
     carregarBis(secao, caixa);
     return secao;
   }
+  // a demo troca o token de uso único por uma sessão própria (função central-entrar-demo; não manda e-mail)
+  function entrarNaDemo(url, botao) {
+    botao.disabled = true; botao.textContent = "Entrando…";
+    funcao("central-entrar-demo", {}).then(function (r) {
+      location.href = url.replace(/\/$/, "") + "/#entrar=" + encodeURIComponent(r.token_hash);
+    }).catch(function (e) { botao.disabled = false; botao.textContent = "Entrar"; alert(e.message); });
+  }
   function carregarBis(secao, caixa) {
     pedir("GET", "/rest/v1/central_bis?select=id,nome,url,tipo&ativo=is.true&order=ordem.asc,nome.asc", undefined, true).then(function (r) {
       if (r.status === 401) { sairDaConta("Sua sessão terminou. Entre de novo."); return; }
@@ -231,7 +238,10 @@
         var url = b.tipo === "demo" ? DEMO_URL : b.url;
         return el("li", { class: "linha" }, [
           el("div", { class: "linha-txt" }, [el("b", { texto: b.nome }), el("span", { texto: url.replace(/^https:\/\//, "").replace(/\/$/, "") + " · " + (TIPOS_BI[b.tipo] || b.tipo) })]),
-          el("a", { class: "botao-mini", href: url, target: "_blank", rel: "noopener", texto: "Abrir" }),
+          // abre na mesma aba (o BI tem o botão "Central" para voltar); na demo, já entra com a conta de administrador
+          b.tipo === "demo"
+            ? el("button", { class: "botao-mini", type: "button", texto: "Entrar", onclick: function (ev) { entrarNaDemo(url, ev.currentTarget); } })
+            : el("a", { class: "botao-mini", href: url, texto: "Abrir" }),
         ]);
       })), caixa);
     }).catch(function () {

@@ -56,6 +56,9 @@
   .gsc-faixa i { width: 8px; height: 8px; border-radius: 50%; background: var(--laranja); }
   .gsc-faixa button { font: 700 12px/1.2 var(--gsc-fonte); color: var(--preto); background: var(--pessego); border: 0; border-radius: 999px; padding: 5px 10px; cursor: pointer; }
   .gsc-faixa button:hover { background: var(--branco); }
+  .gsc-faixa .gsc-central { font: 700 12px/1.2 var(--gsc-fonte); color: var(--branco); border: 1px solid rgba(255, 255, 255, .45); border-radius: 999px; padding: 4px 10px; text-decoration: none; }
+  .gsc-faixa .gsc-central:hover { background: rgba(255, 255, 255, .15); }
+  .gsc-faixa .gsc-central[hidden] { display: none; }
   @media (max-width: 639px) {
     .gsc-faixa { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); font-size: 11px; gap: 6px; padding-left: 10px; }
   }
@@ -93,6 +96,6 @@
 </main>
 
 <div id="raiz"></div>
-<div class="gsc-faixa" id="gsc-faixa" role="note" hidden><i></i>Demonstração · dados fictícios<button type="button" id="gsc-sair">Sair</button></div>
+<div class="gsc-faixa" id="gsc-faixa" role="note" hidden><i></i>Demonstração · dados fictícios<a id="gsc-central" class="gsc-central" href="#" hidden>Central</a><button type="button" id="gsc-sair">Sair</button></div>
 </body>
 </html>

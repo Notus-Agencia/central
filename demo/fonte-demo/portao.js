@@ -12,6 +12,7 @@
   var CHAVE_AVISO = "gsc-demo:aviso";
   var REVALIDAR_MS = 3 * 60 * 1000;
   var WHATSAPP = "https://wa.me/5562994029664?text=" + encodeURIComponent("Olá! Quero falar sobre a demonstração do BI da Gestão Sem Caos.");
+  var CENTRAL = "https://central.gestaosemcaos.com.br";
   var APP = window.__DEMO_APP; // { css, modulo, scripts } — escrito na montagem
 
   var MENSAGENS = {
@@ -139,7 +140,7 @@
   // por fora de todos os simuladores: quem está logado é a pessoa da demonstração, com a visão da gestão
   function instalarIdentidade() {
     var anterior = window.fetch.bind(window);
-    var email = dados.login + "@" + DOMINIO;
+    var email = dados.login.indexOf("@") >= 0 ? dados.login : dados.login + "@" + DOMINIO;
     window.fetch = function (entrada, opcoes) {
       var url = typeof entrada === "string" ? entrada : "";
       if (url.indexOf("/api/") === 0) {
@@ -177,7 +178,9 @@
         document.head.appendChild(m);
         $("gsc-carregando").hidden = true;
         $("gsc-faixa").hidden = false;
-        $("gsc-faixa").title = "Acesso válido até " + new Date(dados.expira_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+        $("gsc-faixa").title = dados.expira_em ? "Acesso válido até " + new Date(dados.expira_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Acesso de administrador";
+        // administrador da Central: o botão de voltar para ela
+        $("gsc-central").hidden = !dados.admin;
         vigiar();
       })
       .catch(function () { $("gsc-carregando").textContent = "Não consegui carregar a demonstração. Recarregue a página."; });
@@ -193,6 +196,7 @@
   }
   function agendarVencimento() {
     clearTimeout(relogio);
+    if (!dados.expira_em) return; // administrador: sem prazo
     var falta = new Date(dados.expira_em).getTime() - Date.now() + 1500;
     if (falta > 0 && falta < 2147483000) relogio = setTimeout(revalidar, falta);
   }
@@ -211,6 +215,20 @@
     $("gsc-aviso-zap").href = WHATSAPP;
     var aviso = null;
     try { aviso = sessionStorage.getItem(CHAVE_AVISO); sessionStorage.removeItem(CHAVE_AVISO); } catch (e) { /* segue */ }
+    $("gsc-central").href = CENTRAL;
+    // vindo da Central (botão "Entrar"): troca o token de uso único por uma sessão própria, começando do zero
+    var entrar = new URLSearchParams(location.hash.replace(/^#/, "")).get("entrar");
+    if (entrar) {
+      history.replaceState(null, "", location.pathname);
+      $("gsc-carregando").textContent = "Entrando…";
+      pedir("/auth/v1/verify", { type: "magiclink", token_hash: entrar }).then(function (r) {
+        if (r.status !== 200 || !r.dados || !r.dados.access_token) { mostrarLogin("Link de entrada vencido. Volte à Central e clique em Entrar de novo."); return; }
+        limparTudo();
+        guardarTokens(r.dados);
+        return validar(true).then(function (v) { if (v.valido) iniciar(v); else sair(v.motivo); });
+      }).catch(function () { mostrarLogin("Não consegui falar com o servidor. Tente de novo."); });
+      return;
+    }
     if (!sessao) { mostrarLogin(aviso); return; }
     // recarregou a página com a sessão aberta: confere no servidor e segue (sem apagar o que a pessoa mexeu)
     validar(false).then(function (v) { if (v.valido) iniciar(v); else sair(v.motivo); })
