@@ -3,7 +3,7 @@
 set -e
 AQUI=$(cd "$(dirname "$0")" && pwd); OUT="$AQUI/site"
 rm -rf "$OUT"; mkdir -p "$OUT"
-cp "$AQUI/fonte-central/central.js" "$AQUI/comum/fonte.woff2" "$AQUI/comum/icone.svg" "$OUT/"
+cp "$AQUI/fonte-central/central.js" "$AQUI/comum/fonte.woff2" "$AQUI/comum/icone.svg" "$AQUI/comum/icone-email.png" "$OUT/"
 printf 'central.gestaosemcaos.com.br\n' > "$OUT/CNAME"; : > "$OUT/.nojekyll"; printf 'User-agent: *\nDisallow: /\n' > "$OUT/robots.txt"
 python3 - "$AQUI/fonte-central/index.modelo.html" "$AQUI/comum/logo-limpo.svg" "$OUT/index.html" <<'PY'
 import json, sys
