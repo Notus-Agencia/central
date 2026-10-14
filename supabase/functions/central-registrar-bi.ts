@@ -1,13 +1,19 @@
 // Registro automático de um BI na Central (fase dos fundadores; pública: verify_jwt = false). Quem chama é o servidor do
 // próprio BI (modules/central/ligacao.ts no repositório do BI), na subida e uma vez por dia até dar certo, com
-// { url, nome, versao, chave }. A chave nasce no BI e só abre /api/v1/uso-pessoas e /api/v1/central/ping de lá.
+// { url, nome, versao, chave, chave_comandos? }. A chave nasce no BI e só abre /api/v1/uso-pessoas e /api/v1/central/ping de lá.
+// chave_comandos (Onda 7): a chave PRIVADA Ed25519 dos comandos assinados, gerada pelo BI no mesmo registro (ele guarda só
+// a pública). Vem junto da chave de leitura, que a conferência abaixo prova ser do BI: ninguém troca a chave dos comandos
+// sem ser o próprio BI. Guardada em central_bis.chave_comandos (a tela não lê a coluna) e usada só pela central-comando.
+// BI ligado antes da Onda 7: registra de novo sozinho (a ligação dele não conta como confirmada sem a chave pública) e
+// a chave_comandos entra no mesmo cadastro.
 // Antes de gravar, confirma que a chave é verdadeira: chama GET {url}/api/v1/central/ping com ela (tempo curto, sem
 // redirecionar) e exige 200 com o mesmo endereço. Ninguém consegue trocar a chave de um BI sem ser o próprio BI.
 //   - BI já cadastrado com a mesma URL: troca chave_leitura e atualiza versão, último contato e ligado_auto_em
 //     (o nome do cadastro não muda: é o que o admin escolheu);
 //   - BI novo: entra com ativo = false e aguardando_aprovacao = true (o admin aprova na aba BIs).
 // Limite contra abuso (tabela central_registros): por endereço e no total, por hora; BIs novos esperando, no máximo 20.
-// Resposta: só { ok: true } ou { erro }. A chave nunca volta.
+// Resposta: só { ok: true, comandos: true|false } ou { erro }. As chaves nunca voltam. comandos = a chave dos comandos
+// ficou guardada (o BI só grava a pública dele quando vê true).
 import { json, servico } from "./_comum.ts";
 
 const MAX_CORPO = 4096;
@@ -16,6 +22,7 @@ const POR_URL_HORA = 6;
 const TOTAL_HORA = 60;
 const MAX_AGUARDANDO = 20;
 const CHAVE = /^bi_c_[A-Za-z0-9_-]{43}$/;
+const CHAVE_COMANDOS = /^bi_k_[A-Za-z0-9_-]{64}$/;
 const VERSAO = /^v\d{1,4}\.\d{1,4}\.\d{1,5}$/;
 
 /** o endereço público do BI (https, nome de domínio, sem porta, usuário nem caminho) normalizado; null = recusado */
@@ -69,6 +76,9 @@ Deno.serve(async (req) => {
     if (corpo.nome !== undefined && (typeof corpo.nome !== "string" || corpo.nome.length > 120)) return json(400, { erro: "Nome inválido." });
     if (corpo.versao != null && (typeof corpo.versao !== "string" || corpo.versao.length > 20)) return json(400, { erro: "Versão inválida." });
     const chave = corpo.chave;
+    if (corpo.chave_comandos !== undefined && (typeof corpo.chave_comandos !== "string" || !CHAVE_COMANDOS.test(corpo.chave_comandos)))
+      return json(400, { erro: "Chave dos comandos em formato inesperado." });
+    const chaveComandos = typeof corpo.chave_comandos === "string" ? corpo.chave_comandos : null;
 
     const svc = servico();
     // limite: por endereço e no total, na última hora (conta a tentativa antes de chamar o BI)
@@ -94,6 +104,7 @@ Deno.serve(async (req) => {
       if (existente.tipo !== "clinica") return json(400, { erro: "Este endereço não é de um BI de clínica." });
       const { error } = await svc.from("central_bis").update({
         chave_leitura: chave, versao: ping.versao, ultimo_contato_em: agora, ligado_auto_em: agora,
+        ...(chaveComandos ? { chave_comandos: chaveComandos } : {}),
       }).eq("id", existente.id);
       if (error) throw error;
     } else {
@@ -102,12 +113,12 @@ Deno.serve(async (req) => {
       const nome = ping.nome || (typeof corpo.nome === "string" && corpo.nome.trim()) || url.replace(/^https:\/\//, "");
       const { error } = await svc.from("central_bis").insert({
         nome: nome.slice(0, 120), url, tipo: "clinica", ativo: false, aguardando_aprovacao: true, ordem: 999,
-        chave_leitura: chave, versao: ping.versao, ultimo_contato_em: agora, ligado_auto_em: agora,
+        chave_leitura: chave, versao: ping.versao, ultimo_contato_em: agora, ligado_auto_em: agora, chave_comandos: chaveComandos,
       });
       if (error) throw error;
     }
     await svc.from("central_registros").update({ ok: true }).eq("id", tentativa.id);
-    return json(200, { ok: true });
+    return json(200, { ok: true, comandos: !!chaveComandos });
   } catch (e) {
     // só a mensagem: o detalhe de um erro do banco pode trazer a linha inteira (com a chave)
     console.error("[central-registrar-bi]", String((e as { message?: unknown })?.message ?? "erro"));

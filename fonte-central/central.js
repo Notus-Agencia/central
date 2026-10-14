@@ -1,4 +1,4 @@
-// Central da Gestão Sem Caos — portal do administrador (v1).
+// Central da Gestão Sem Caos — portal do administrador (Onda 7: Clínicas, Acessos de demonstração, BIs e Uso).
 // Login pelo Supabase Auth; a lista de acessos vem da tabela demo_acessos e a de BIs da central_bis (RLS: só administradores);
 // criar, estender e revogar passam pelas edge functions, que conferem o administrador no servidor.
 // Só a chave pública do Supabase fica aqui.
@@ -20,7 +20,7 @@
     { rotulo: "Data e hora", horas: null },
   ];
 
-  var sessao = null, eu = null, acessos = [], aba = "acessos", validadeEscolhida = 24, atualizador = null;
+  var sessao = null, eu = null, acessos = [], aba = "clinicas", validadeEscolhida = 24, atualizador = null;
 
   // ── utilidades ──
   function $(s, raiz) { return (raiz || document).querySelector(s); }
@@ -190,7 +190,7 @@
   // ── tela principal ──
   function telaPrincipal() {
     var abas = el("nav", { class: "abas", role: "tablist" }, [
-      botaoAba("acessos", "Acessos de demonstração"), botaoAba("bis", "BIs"), botaoAba("uso", "Uso"),
+      botaoAba("clinicas", "Clínicas"), botaoAba("acessos", "Acessos de demonstração"), botaoAba("bis", "BIs"), botaoAba("uso", "Uso"),
     ]);
     var topo = el("header", { class: "topo" }, [
       logo(),
@@ -210,7 +210,8 @@
   }
   function desenharAba() {
     var corpo = $("#corpo"); corpo.innerHTML = "";
-    if (aba === "bis") corpo.appendChild(painelBis());
+    if (aba === "clinicas") corpo.appendChild(painelClinicas());
+    else if (aba === "bis") corpo.appendChild(painelBis());
     else if (aba === "uso") corpo.appendChild(painelUso());
     else { corpo.appendChild(painelCriar()); corpo.appendChild(el("div", { id: "lista" })); carregarAcessos(); }
   }
@@ -283,7 +284,7 @@
   // lista de BIs: os ativos e os que se registraram sozinhos e aguardam aprovação (tem_chave diz se há chave de
   // leitura do uso; a chave em si nunca chega ao navegador)
   function listaBis() {
-    return pedir("GET", "/rest/v1/central_bis?select=id,nome,url,tipo,ativo,tem_chave,aguardando_aprovacao,ligado_auto_em,versao&or=(ativo.is.true,aguardando_aprovacao.is.true)&order=aguardando_aprovacao.desc,ordem.asc,nome.asc", undefined, true).then(function (r) {
+    return pedir("GET", "/rest/v1/central_bis?select=id,nome,url,tipo,ativo,tem_chave,tem_comandos,aguardando_aprovacao,ligado_auto_em,versao&or=(ativo.is.true,aguardando_aprovacao.is.true)&order=aguardando_aprovacao.desc,ordem.asc,nome.asc", undefined, true).then(function (r) {
       if (r.status === 401) { sairDaConta("Sua sessão terminou. Entre de novo."); return null; }
       if (r.status !== 200 || !Array.isArray(r.dados)) throw new Error();
       return r.dados;
@@ -543,6 +544,371 @@
         el("div", { class: "uso-eixo", "aria-hidden": "true" }, ["0h", "6h", "12h", "18h", "23h"].map(function (t) { return el("span", { texto: t }); })),
       ]),
     ]);
+  }
+
+  // ── aba Clínicas (Onda 7): por clínica, saúde, versão, módulos, acessos, suporte e histórico, pelos comandos assinados
+  // (função central-comando, que assina no servidor com a chave que o próprio BI entregou); e o assistente Nova clínica
+  // (central-implantacao), que guarda a ficha de implantação até a hospedagem ser conectada (central-hospedagem). ──
+  var NOMES_STATUS_IMPL = { aguardando_hospedagem: "Aguardando hospedagem", hospedando: "Hospedando", no_ar: "No ar", cancelada: "Cancelada" };
+  var MINUTOS_SUPORTE = [15, 30, 60, 120];
+  var clinicaAberta = null, suporteMinutos = 30;
+
+  function comando(bi, corpo) {
+    var c = { bi_id: bi.id }; Object.keys(corpo).forEach(function (k) { c[k] = corpo[k]; });
+    return funcao("central-comando", c);
+  }
+  function aviso(texto, tipo) { return el("div", { class: "aviso" + (tipo ? " " + tipo : ""), role: "status", texto: texto }); }
+  function ponto(cor) { return el("span", { class: "ponto ponto-" + cor, "aria-hidden": "true" }); }
+
+  function painelClinicas() {
+    var lista = el("section", { class: "cartao" }, [el("h2", { texto: "Clínicas" }), el("p", { class: "vazio", role: "status", texto: "Carregando…" })]);
+    var implantacoes = el("section", { class: "cartao" }, [el("p", { class: "vazio", texto: "Carregando as implantações…" })]);
+    var caixa = el("div", { class: "clinicas" }, [lista, implantacoes]);
+    listaBis().then(function (bis) {
+      if (!bis) return;
+      var clinicas = bis.filter(function (b) { return b.tipo === "clinica" && b.ativo; });
+      lista.innerHTML = "";
+      lista.appendChild(el("h2", { texto: "Clínicas" + (clinicas.length ? " · " + clinicas.length : "") }));
+      if (!clinicas.length) { lista.appendChild(el("p", { class: "vazio", texto: "Nenhuma clínica aprovada ainda. Os BIs aparecem aqui depois de aprovados na aba BIs." })); }
+      else lista.appendChild(el("ul", { class: "linhas" }, clinicas.map(function (b) { return linhaClinica(b, caixa); })));
+      desenharImplantacoes(implantacoes, clinicas);
+      if (clinicaAberta) { var b = clinicas.filter(function (x) { return x.id === clinicaAberta; })[0]; if (b) abrirClinica(b, caixa); }
+    }).catch(function () { lista.innerHTML = ""; lista.appendChild(el("p", { class: "erro", texto: "Não consegui carregar as clínicas agora." })); });
+    return caixa;
+  }
+
+  function linhaClinica(b, caixa) {
+    return el("li", { class: "linha" }, [
+      el("div", { class: "linha-txt" }, [
+        el("b", { texto: b.nome }),
+        el("span", { texto: b.url.replace(/^https:\/\//, "") + (b.versao ? " · versão " + b.versao : "") }),
+        b.tem_comandos ? el("span", { class: "ligacao ok", texto: "Recebe comandos da Central" })
+          : el("span", { class: "ligacao", texto: "Precisa da próxima atualização do BI para receber comandos" }),
+      ]),
+      el("button", { class: "botao-mini" + (clinicaAberta === b.id ? " forte" : ""), type: "button", texto: "Ver clínica", onclick: function () { clinicaAberta = b.id; abrirClinica(b, caixa); } }),
+    ]);
+  }
+
+  function abrirClinica(b, caixa) {
+    var velho = caixa.querySelector(".clinica-detalhe"); if (velho) velho.remove();
+    var det = el("section", { class: "clinica-detalhe" }, [
+      el("header", { class: "uso-cabeca" }, [
+        el("div", { class: "detalhe-topo" }, [el("h1", { texto: b.nome }),
+          el("button", { type: "button", class: "link", texto: "Fechar", onclick: function () { clinicaAberta = null; det.remove(); } })]),
+        el("p", { class: "sub", texto: b.url.replace(/^https:\/\//, "") + (b.versao ? " · versão " + b.versao : "") }),
+      ]),
+      el("div", { class: "cartao" }, [el("p", { class: "vazio", role: "status", texto: "Falando com o BI…" })]),
+    ]);
+    caixa.insertBefore(det, caixa.children[1] || null);
+    det.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!b.tem_comandos) {
+      det.replaceChild(el("div", { class: "cartao" }, [aviso("Este BI ainda não recebe comandos: precisa da próxima atualização do BI. Depois dela ele se liga sozinho à Central e esta tela mostra saúde, módulos, acessos e o suporte.")]), det.lastChild);
+      det.appendChild(cartaoHistorico(b));
+      return;
+    }
+    comando(b, { comando: "resumo" }).then(function (r) {
+      det.removeChild(det.lastChild);
+      if (!r.ok) { det.appendChild(el("div", { class: "cartao" }, [aviso(r.erro, r.precisa_atualizar ? "" : "alerta")])); det.appendChild(cartaoHistorico(b)); return; }
+      var d = r.dados;
+      det.appendChild(cartaoSaude(d));
+      det.appendChild(cartaoSuporte(b, d.suporte || [], caixa));
+      det.appendChild(cartaoModulos(b, d.modulos));
+      det.appendChild(cartaoAcessos(d.acessos || []));
+      var nomes = {}; ((d.modulos && d.modulos.modulos) || []).forEach(function (x) { nomes[x.chave] = x.nome; });
+      det.appendChild(cartaoHistorico(b, nomes));
+    }).catch(function (e) { det.removeChild(det.lastChild); det.appendChild(el("div", { class: "cartao" }, [el("p", { class: "erro", texto: e.message })])); });
+  }
+
+  function cartaoSaude(d) {
+    var s = d.saude || {}, id = d.identidade || {};
+    var fontes = (s.fontes || []).map(function (f) {
+      var cor = f.nunca ? "claro" : f.parada ? "laranja" : "azul";
+      var txt = f.nunca ? "ainda não leu" : f.parada ? "parada desde " + (f.ultimo_sucesso ? dataHora(f.ultimo_sucesso) : "—") : "em dia" + (f.ultimo_sucesso ? " · " + relativo(f.ultimo_sucesso) : "");
+      return el("li", {}, [ponto(cor), el("span", {}, [el("b", { texto: f.nome }), " " + txt])]);
+    });
+    return el("section", { class: "cartao" }, [
+      el("h2", { texto: "Saúde" }),
+      el("div", { class: "uso-kpis" }, [
+        kpi(s.dados_em_dia ? "Em dia" : "Atenção", "dados das fontes"),
+        kpi(s.versao || "—", "versão" + (s.commit ? " · " + String(s.commit).slice(0, 7) : "")),
+        kpi(String(s.pessoas_ativas != null ? s.pessoas_ativas : "—"), "pessoas com acesso"),
+        kpi(String(s.entraram_7d != null ? s.entraram_7d : "—"), "entraram nos últimos 7 dias"),
+      ]),
+      fontes.length ? el("ul", { class: "uso-achados fontes" }, fontes) : null,
+      el("p", { class: "nota", texto: "Identidade: " + [id.nome, id.marca ? "marca " + id.marca : null, id.sigla ? "sigla " + id.sigla : null].filter(Boolean).join(" · ") +
+        (id.medicas && id.medicas.length ? " · médicas: " + id.medicas.join(", ") : "") }),
+    ]);
+  }
+  function kpi(v, rotulo) { return el("div", { class: "uso-kpi" }, [el("b", { texto: v }), el("span", { texto: rotulo })]); }
+
+  function cartaoSuporte(b, historico, caixa) {
+    var erro = el("p", { class: "erro", role: "alert", hidden: true });
+    var motivo = el("input", { type: "text", placeholder: "Motivo (opcional): ex. conferir o faturamento", maxlength: "200", autocomplete: "off" });
+    var chips = el("div", { class: "chips", role: "radiogroup", "aria-label": "Tempo do acesso" }, MINUTOS_SUPORTE.map(function (m) {
+      return el("button", { type: "button", class: "chip", role: "radio", "aria-checked": String(m === suporteMinutos), texto: m < 60 ? m + " min" : (m / 60) + " h", onclick: function () {
+        suporteMinutos = m; chips.querySelectorAll(".chip").forEach(function (c) { c.setAttribute("aria-checked", String(c === this)); }, this);
+      } });
+    }));
+    var entrar = el("button", { type: "button", class: "botao botao-auto", texto: "Entrar como suporte", onclick: function () {
+      if (!confirm("Entrar no BI de " + b.nome + " como suporte por " + suporteMinutos + " minutos? A entrada fica registrada no log que a clínica vê.")) return;
+      erro.hidden = true; entrar.disabled = true; entrar.textContent = "Gerando o acesso…";
+      var janela = window.open("about:blank", "_blank");
+      comando(b, { comando: "suporte", minutos: suporteMinutos, motivo: motivo.value.trim() }).then(function (r) {
+        if (!r.ok) throw new Error(r.erro);
+        var url = r.dados.entrar;
+        if (janela) { try { janela.opener = null; } catch (e) { /* segue */ } janela.location.href = url; }
+        else erro.parentNode.insertBefore(el("p", { class: "nota" }, ["O navegador bloqueou a janela. ", el("a", { href: url, target: "_blank", rel: "noopener", texto: "Abrir o BI como suporte" }), " (vale 5 minutos)."]), erro);
+        motivo.value = "";
+        abrirClinica(b, caixa);
+      }).catch(function (e) { if (janela) janela.close(); erro.textContent = e.message; erro.hidden = false; })
+        .then(function () { entrar.disabled = false; entrar.textContent = "Entrar como suporte"; });
+    } });
+    var abertos = historico.filter(function (h) { return h.aberto; });
+    var encerrar = abertos.length ? el("button", { type: "button", class: "botao-mini perigo", texto: "Encerrar suporte agora", onclick: function () {
+      if (!confirm("Encerrar agora todo acesso de suporte aberto em " + b.nome + "? Quem estiver dentro sai na hora.")) return;
+      encerrar.disabled = true;
+      comando(b, { comando: "encerrar_suporte" }).then(function (r) { if (!r.ok) throw new Error(r.erro); abrirClinica(b, caixa); })
+        .catch(function (e) { erro.textContent = e.message; erro.hidden = false; encerrar.disabled = false; });
+    } }) : null;
+    return el("section", { class: "cartao" }, [
+      el("h2", { texto: "Suporte" }),
+      el("p", { class: "nota", texto: "Abre o BI da clínica com um acesso temporário da Gestão Sem Caos. O link vale 5 minutos e uma vez só; a clínica vê no log quem entrou e de que horas a que horas." }),
+      el("div", { class: "suporte-linha" }, [chips, motivo]),
+      el("div", { class: "criado-acoes" }, [entrar, encerrar]), erro,
+      historico.length ? el("ul", { class: "linhas historico" }, historico.slice(0, 6).map(function (h) {
+        return el("li", { class: "linha" }, [el("div", { class: "linha-txt" }, [
+          el("b", {}, [h.quem_nome, h.aberto ? el("span", { class: "selo-espera", texto: "Aberto" }) : null]),
+          el("span", { texto: dataHora(h.inicio) + " até " + new Date(h.fim).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) +
+            (h.entrou_em ? " · entrou " + new Date(h.entrou_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : " · não chegou a entrar") +
+            (h.encerrado_em ? " · encerrado" : "") + (h.motivo ? " · " + h.motivo : "") }),
+        ])]);
+      })) : null,
+    ]);
+  }
+
+  function cartaoModulos(b, m) {
+    var mods = (m && m.modulos) || [];
+    var ligados = {}; mods.forEach(function (x) { ligados[x.chave] = x.ligado; });
+    var grupos = [];
+    mods.forEach(function (x) { if (grupos.indexOf(x.grupo) < 0) grupos.push(x.grupo); });
+    var erro = el("p", { class: "erro", role: "alert", hidden: true });
+    function chave(x) {
+      var botao = el("button", { type: "button", class: "interruptor", role: "switch", "aria-checked": String(!!ligados[x.chave]), "aria-label": x.nome, onclick: function () {
+        var novo = !ligados[x.chave];
+        if (!confirm((novo ? "Ligar " : "Desligar ") + "“" + x.nome + "” em " + b.nome + "?" + (novo ? "" : " A clínica deixa de ver essa parte na hora."))) return;
+        erro.hidden = true; botao.disabled = true;
+        comando(b, { comando: "modulo", chave: x.chave, ligado: novo }).then(function (r) {
+          if (!r.ok) throw new Error(r.erro);
+          Object.keys(r.dados.ligados || {}).forEach(function (k) { ligados[k] = r.dados.ligados[k]; });
+          secao.querySelectorAll(".interruptor").forEach(function (i) { i.setAttribute("aria-checked", String(!!ligados[i.getAttribute("data-chave")])); });
+        }).catch(function (e) { erro.textContent = e.message; erro.hidden = false; }).then(function () { botao.disabled = false; });
+      } });
+      botao.setAttribute("data-chave", x.chave);
+      return el("li", { class: "modulo" }, [el("div", {}, [el("b", { texto: x.nome }), el("span", { class: "nota", texto: x.descricao })]), botao]);
+    }
+    var secao = el("section", { class: "cartao" }, [
+      el("h2", { texto: "Módulos" }),
+      el("p", { class: "nota", texto: "Sempre ligados (núcleo): " + ((m && m.nucleo) || []).join(", ") + "." }), erro,
+    ].concat(grupos.map(function (g) {
+      return el("div", { class: "grupo-modulos" }, [el("div", { class: "rot", texto: g }), el("ul", { class: "modulos" }, mods.filter(function (x) { return x.grupo === g; }).map(chave))]);
+    })));
+    return secao;
+  }
+
+  function cartaoAcessos(acessos) {
+    var ativos = acessos.filter(function (a) { return a.ativo; });
+    return el("section", { class: "cartao" }, [
+      el("h2", { texto: "Acessos · " + ativos.length + " ativos" }),
+      el("p", { class: "nota", texto: "Quem cria e tira acessos da equipe é a própria clínica, em Pessoas e acessos." }),
+      el("ul", { class: "linhas" }, acessos.map(function (a) {
+        return el("li", { class: "linha" }, [el("div", { class: "linha-txt" }, [
+          el("b", {}, [a.nome, a.ativo ? null : el("span", { class: "selo-espera", texto: "Desativado" })]),
+          el("span", { texto: a.papel_rotulo + (a.suporte ? "" : " · " + a.email) + " · " + (a.ultimo_acesso_em ? "último acesso " + relativo(a.ultimo_acesso_em) : "nunca entrou") }),
+        ])]);
+      })),
+    ]);
+  }
+
+  function cartaoHistorico(b, nomesModulos) {
+    var corpo = el("p", { class: "vazio", texto: "Carregando…" });
+    pedir("GET", "/rest/v1/central_comandos?select=em,admin_nome,comando,leitura,ok,resultado&bi_id=eq." + b.id + "&order=em.desc&limit=25", undefined, true).then(function (r) {
+      if (r.status !== 200 || !Array.isArray(r.dados)) throw new Error();
+      var mudancas = r.dados.filter(function (c) { return !c.leitura || !c.ok; });
+      corpo.replaceWith(mudancas.length ? el("ul", { class: "linhas historico" }, mudancas.map(function (c) {
+        return el("li", { class: "linha" }, [el("div", { class: "linha-txt" }, [
+          el("b", {}, [ponto(c.ok ? "azul" : "laranja"), NOMES_COMANDO[c.comando] || c.comando]),
+          el("span", { texto: dataHora(c.em) + " · " + (c.admin_nome || "—") + (c.resultado ? " · " + legivel(c, nomesModulos || {}) : "") }),
+        ])]);
+      })) : el("p", { class: "vazio", texto: "Nenhuma mudança feita pela Central nesta clínica ainda." }));
+    }).catch(function () { corpo.textContent = "Não consegui carregar o histórico."; });
+    return el("section", { class: "cartao" }, [el("h2", { texto: "Histórico da Central" }), corpo]);
+  }
+  // "notas desligado" → "Notas desligado" (o nome do módulo, quando a clínica respondeu o catálogo)
+  function legivel(c, nomes) {
+    if (c.comando !== "modulo" || !c.ok) return c.resultado;
+    var k = c.resultado.split(" ")[0];
+    return nomes[k] ? nomes[k] + c.resultado.slice(k.length) : c.resultado;
+  }
+  var NOMES_COMANDO = { modulo: "Ligou ou desligou módulo", suporte: "Entrou como suporte", encerrar_suporte: "Encerrou o suporte", resumo: "Leitura", saude: "Leitura", modulos: "Leitura", acessos: "Leitura", identidade: "Leitura", historico_suporte: "Leitura" };
+
+  // ── implantações (assistente Nova clínica) ──
+  function desenharImplantacoes(secao, clinicas) {
+    pedir("GET", "/rest/v1/central_implantacoes?select=id,nome,dominio,plano,status,ficha,bi_id,criado_em,responsavel&order=criado_em.desc&limit=50", undefined, true).then(function (r) {
+      if (r.status !== 200 || !Array.isArray(r.dados)) throw new Error();
+      secao.innerHTML = "";
+      secao.appendChild(el("div", { class: "detalhe-topo" }, [el("h2", { texto: "Implantações" }),
+        el("button", { type: "button", class: "botao-mini forte", texto: "Nova clínica", onclick: function () { assistente(secao, clinicas); } })]));
+      if (!r.dados.length) { secao.appendChild(el("p", { class: "vazio", texto: "Nenhuma clínica nova em implantação." })); return; }
+      secao.appendChild(el("ul", { class: "linhas" }, r.dados.map(function (imp) { return linhaImplantacao(imp, secao, clinicas); })));
+    }).catch(function () { secao.innerHTML = ""; secao.appendChild(el("p", { class: "erro", texto: "Não consegui carregar as implantações agora." })); });
+  }
+
+  function linhaImplantacao(imp, secao, clinicas) {
+    var ficha = el("div", { class: "ficha", hidden: true });
+    var msg = el("p", { class: "nota", hidden: true });
+    var status = el("select", { "aria-label": "Situação", onchange: function () {
+      funcao("central-implantacao", { acao: "status", id: imp.id, status: status.value }).then(function () { desenharImplantacoes(secao, clinicas); })
+        .catch(function (e) { alert(e.message); status.value = imp.status; });
+    } }, Object.keys(NOMES_STATUS_IMPL).map(function (k) { return el("option", { value: k, selected: k === imp.status, texto: NOMES_STATUS_IMPL[k] }); }));
+    var ligar = el("select", { "aria-label": "Clínica no ar", onchange: function () {
+      funcao("central-implantacao", { acao: "status", id: imp.id, status: ligar.value ? "no_ar" : imp.status, bi_id: ligar.value || null })
+        .then(function () { desenharImplantacoes(secao, clinicas); }).catch(function (e) { alert(e.message); });
+    } }, [el("option", { value: "", texto: "Ligar a um BI…" })].concat(clinicas.map(function (b) { return el("option", { value: b.id, selected: b.id === imp.bi_id, texto: b.nome }); })));
+    var criar = imp.status === "aguardando_hospedagem" ? el("button", { type: "button", class: "botao-mini", texto: "Criar no servidor", onclick: function () {
+      criar.disabled = true;
+      funcao("central-hospedagem", { implantacao_id: imp.id }).then(function (r) { msg.textContent = r.mensagem; msg.hidden = false; })
+        .catch(function (e) { msg.textContent = e.message; msg.hidden = false; }).then(function () { criar.disabled = false; });
+    } }) : null;
+    return el("li", { class: "linha linha-impl" }, [
+      el("div", { class: "linha-txt" }, [
+        el("b", {}, [imp.nome, el("span", { class: "selo-espera" + (imp.status === "no_ar" ? " ok" : ""), texto: NOMES_STATUS_IMPL[imp.status] || imp.status })]),
+        el("span", { texto: imp.dominio + " · plano " + imp.plano + " · " + (imp.responsavel && imp.responsavel.nome ? imp.responsavel.nome + " · " : "") + "criada em " + dataHora(imp.criado_em) }),
+      ]),
+      el("div", { class: "aprovacao" }, [
+        el("button", { type: "button", class: "botao-mini", texto: "Ficha", onclick: function () { ficha.hidden = !ficha.hidden; if (!ficha.firstChild) desenharFicha(ficha, imp.ficha); } }),
+        criar, status, ligar,
+      ]),
+      msg, ficha,
+    ]);
+  }
+
+  var ORIGEM = { fixo: "valor fixo", gerar_no_servidor: "gerar no servidor", da_clinica: "a clínica cola no BI", opcional: "opcional" };
+  function desenharFicha(alvo, f) {
+    var sql = f.configuracao_inicial && f.configuracao_inicial.sql || "";
+    var copiarSql = el("button", { type: "button", class: "botao-mini", texto: "Copiar SQL", onclick: function () { copiar(sql, copiarSql); } });
+    alvo.appendChild(el("div", { class: "rot", texto: "Servidor" }));
+    alvo.appendChild(el("p", { class: "nota", texto: "Projeto " + f.servidor.projeto + " · banco Postgres " + f.servidor.banco.postgres + " · app pela porta " + f.servidor.app.porta +
+      " · domínio " + f.servidor.dominio.nome + " com HTTPS · " + f.servidor.backup }));
+    alvo.appendChild(el("div", { class: "rot", texto: "Variáveis (nenhum segredo fica aqui)" }));
+    alvo.appendChild(el("ul", { class: "uso-lista" }, f.variaveis.map(function (v) {
+      return el("li", {}, [el("span", {}, [el("code", { texto: v.nome }), v.nota ? " " + v.nota : ""]), el("span", { texto: v.valor || ORIGEM[v.origem] || v.origem })]);
+    })));
+    alvo.appendChild(el("div", { class: "rot", texto: "Passos" }));
+    alvo.appendChild(el("ol", { class: "passos" }, f.passos.map(function (p) { return el("li", { texto: p }); })));
+    alvo.appendChild(el("div", { class: "detalhe-topo" }, [el("div", { class: "rot", texto: "Configuração inicial" }), copiarSql]));
+    alvo.appendChild(el("pre", { class: "mensagem sql", texto: sql }));
+  }
+
+  function assistente(secao, clinicas) {
+    var catalogo = null, passo = 0, dados = { plano: "fundador", modulos: {}, medicas: [""], responsavel: {} };
+    var corpo = el("div", { class: "assistente" });
+    var modal = el("div", { class: "fundo", role: "dialog", "aria-modal": "true", "aria-label": "Nova clínica", onclick: function (ev) { if (ev.target === modal) fechar(); } }, [
+      el("div", { class: "cartao janela" }, [
+        el("div", { class: "detalhe-topo" }, [el("h1", { texto: "Nova clínica" }), el("button", { type: "button", class: "link", texto: "Fechar", onclick: fechar })]),
+        el("p", { class: "sub", texto: "Gera a ficha de implantação. Nada é criado no servidor agora." }),
+        corpo,
+      ]),
+    ]);
+    function fechar() { modal.remove(); document.removeEventListener("keydown", esc); }
+    function esc(ev) { if (ev.key === "Escape") fechar(); }
+    document.addEventListener("keydown", esc);
+    document.body.appendChild(modal);
+    corpo.appendChild(el("p", { class: "vazio", texto: "Carregando os módulos…" }));
+    funcao("central-implantacao", { acao: "catalogo" }).then(function (c) { catalogo = c; c.modulos.forEach(function (m) { dados.modulos[m.chave] = true; }); desenhar(); })
+      .catch(function (e) { corpo.innerHTML = ""; corpo.appendChild(el("p", { class: "erro", texto: e.message })); });
+
+    var PASSOS = ["Clínica", "Médicas", "Módulos", "Responsável", "Revisar"];
+    function campo(rotulo, chaveObj, chave, attrs) {
+      var i = el("input", Object.assign({ type: "text", autocomplete: "off", value: chaveObj[chave] || "" }, attrs || {}));
+      i.addEventListener("input", function () { chaveObj[chave] = i.value; });
+      return el("label", { class: "campo" }, [el("span", { texto: rotulo }), i]);
+    }
+    function desenhar(erroTexto) {
+      corpo.innerHTML = "";
+      corpo.appendChild(el("ol", { class: "etapas" }, PASSOS.map(function (p, i) { return el("li", { class: i === passo ? "atual" : i < passo ? "feito" : "", texto: p }); })));
+      var erro = el("p", { class: "erro", role: "alert", hidden: !erroTexto, texto: erroTexto || "" });
+      var conteudo;
+      if (passo === 0) conteudo = el("div", {}, [
+        campo("Nome da clínica", dados, "nome", { placeholder: "Clínica Orvalho", maxlength: "120" }),
+        campo("Nome curto (e-mails e remetente)", dados, "nome_curto", { placeholder: "Orvalho", maxlength: "60" }),
+        el("div", { class: "dois" }, [campo("Sigla", dados, "sigla", { placeholder: "CO", maxlength: "6" }), campo("Marca (menu: marca · bi)", dados, "marca", { placeholder: "orvalho", maxlength: "30" })]),
+        campo("Domínio do BI", dados, "dominio", { placeholder: "orvalho.gestaosemcaos.com.br", inputmode: "url", autocapitalize: "none", spellcheck: "false" }),
+      ]);
+      else if (passo === 1) {
+        var lista = el("div", { class: "medicas" });
+        var pintar = function () {
+          lista.innerHTML = "";
+          dados.medicas.forEach(function (m, i) {
+            var inp = el("input", { type: "text", value: m, placeholder: "Dra. Nome", maxlength: "60", "aria-label": "Médica " + (i + 1) });
+            inp.addEventListener("input", function () { dados.medicas[i] = inp.value; });
+            lista.appendChild(el("div", { class: "chave-linha" }, [inp, dados.medicas.length > 1 ? el("button", { type: "button", class: "botao-mini perigo", texto: "Tirar", onclick: function () { dados.medicas.splice(i, 1); pintar(); } }) : null]));
+          });
+        };
+        pintar();
+        conteudo = el("div", {}, [el("p", { class: "nota", texto: "Os nomes que aparecem no BI. O código de cada médica no sistema de gestão é ligado depois da primeira leitura." }), lista,
+          el("button", { type: "button", class: "link", texto: "+ outra médica", onclick: function () { dados.medicas.push(""); pintar(); lista.lastChild.querySelector("input").focus(); } })]);
+      } else if (passo === 2) {
+        var planos = el("div", { class: "chips", role: "radiogroup", "aria-label": "Plano" }, catalogo.planos.map(function (p) {
+          return el("button", { type: "button", class: "chip", role: "radio", "aria-checked": String(dados.plano === p), texto: p === "fundador" ? "Fundador" : p === "clinica" ? "Clínica" : "Completa", onclick: function () {
+            dados.plano = p;
+            catalogo.modulos.forEach(function (m) { dados.modulos[m.chave] = p === "fundador" ? true : m.padrao; });
+            desenhar();
+          } });
+        }));
+        var grupos = []; catalogo.modulos.forEach(function (m) { if (grupos.indexOf(m.grupo) < 0) grupos.push(m.grupo); });
+        conteudo = el("div", {}, [el("div", { class: "rot", texto: "Plano" }), planos,
+          el("p", { class: "nota", texto: dados.plano === "fundador" ? "Fundador: todos os módulos. Tire o que não fizer sentido para a clínica." : "Comece pelo padrão e ajuste." }),
+          el("p", { class: "nota", texto: "Sempre ligados: " + catalogo.nucleo.join(", ") + "." }),
+        ].concat(grupos.map(function (g) {
+          return el("div", { class: "grupo-modulos" }, [el("div", { class: "rot", texto: g }), el("ul", { class: "modulos" }, catalogo.modulos.filter(function (m) { return m.grupo === g; }).map(function (m) {
+            var b = el("button", { type: "button", class: "interruptor", role: "switch", "aria-checked": String(!!dados.modulos[m.chave]), "aria-label": m.nome, onclick: function () {
+              dados.modulos[m.chave] = !dados.modulos[m.chave]; b.setAttribute("aria-checked", String(dados.modulos[m.chave]));
+            } });
+            return el("li", { class: "modulo" }, [el("div", {}, [el("b", { texto: m.nome }), m.depende.length ? el("span", { class: "nota", texto: "precisa de " + m.depende.map(function (d) { return catalogo.modulos.filter(function (x) { return x.chave === d; })[0].nome; }).join(" e ") }) : null]), b]);
+          }))]);
+        })));
+      } else if (passo === 3) conteudo = el("div", {}, [
+        el("p", { class: "nota", texto: "Quem cuida do BI na clínica: recebe o primeiro acesso e o tutorial." }),
+        campo("Nome", dados.responsavel, "nome", { maxlength: "120" }),
+        campo("E-mail", dados.responsavel, "email", { type: "email", inputmode: "email", autocapitalize: "none", maxlength: "120" }),
+        campo("Telefone (opcional)", dados.responsavel, "telefone", { type: "tel", maxlength: "30" }),
+      ]);
+      else conteudo = el("div", { class: "previa" }, [el("p", { class: "vazio", texto: "Montando a ficha…" })]);
+
+      var voltar = passo > 0 ? el("button", { type: "button", class: "botao-mini", texto: "Voltar", onclick: function () { passo--; desenhar(); } }) : null;
+      var seguir = el("button", { type: "button", class: "botao botao-auto", texto: passo === 4 ? "Guardar ficha" : "Continuar", onclick: function () {
+        seguir.disabled = true;
+        if (passo === 4) {
+          funcao("central-implantacao", corpoDoAssistente("criar")).then(function () { fechar(); desenharImplantacoes(secao, clinicas); })
+            .catch(function (e) { erro.textContent = e.message; erro.hidden = false; seguir.disabled = false; });
+          return;
+        }
+        // confere no servidor (as mesmas regras da ficha) antes de passar de etapa
+        funcao("central-implantacao", corpoDoAssistente("previa")).then(function () { passo++; desenhar(); }).catch(function (e) {
+          var m = e.message, daEtapa = [/nome da clínica|marca|domínio/i, /médica/i, /precisa de/i, /responsável/i][passo];
+          if (daEtapa && !daEtapa.test(m)) { passo++; desenhar(); } else { erro.textContent = m; erro.hidden = false; seguir.disabled = false; }
+        });
+      } });
+      corpo.appendChild(conteudo); corpo.appendChild(erro);
+      corpo.appendChild(el("div", { class: "criado-acoes rodape-assistente" }, [voltar, seguir]));
+      if (passo === 4) funcao("central-implantacao", corpoDoAssistente("previa")).then(function (r) { conteudo.innerHTML = ""; desenharFicha(conteudo, r.ficha); })
+        .catch(function (e) { conteudo.innerHTML = ""; erro.textContent = e.message; erro.hidden = false; });
+      var primeiro = conteudo.querySelector("input"); if (primeiro) setTimeout(function () { primeiro.focus(); }, 30);
+    }
+    function corpoDoAssistente(acao) {
+      return { acao: acao, nome: dados.nome, nome_curto: dados.nome_curto, sigla: dados.sigla, marca: dados.marca, dominio: dados.dominio,
+        medicas: dados.medicas.filter(function (m) { return m && m.trim(); }), plano: dados.plano, modulos: dados.modulos, responsavel: dados.responsavel };
+    }
   }
 
   // ── criar acesso ──

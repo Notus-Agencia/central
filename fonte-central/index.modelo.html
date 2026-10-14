@@ -58,7 +58,7 @@
   .quem { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--suave); min-width: 0; }
   .quem span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .abas { display: flex; gap: 4px; margin-bottom: 14px; }
-  .aba { border: 0; background: none; padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--suave); cursor: pointer; }
+  .aba { white-space: nowrap; flex: none; border: 0; background: none; padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--suave); cursor: pointer; }
   .aba[aria-selected="true"] { background: var(--azul-escuro); color: var(--branco); }
   #corpo > .cartao, #lista > .cartao { margin-bottom: 12px; }
 
@@ -176,6 +176,60 @@
   details summary { cursor: pointer; font-weight: 600; color: var(--azul); }
   details summary:focus-visible { outline: 2px solid var(--azul-escuro); outline-offset: 3px; border-radius: 6px; }
   .uso-rodape { padding: 0 2px; }
+
+  /* aba Clínicas (Onda 7) */
+  .clinicas { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+  .clinicas > * { min-width: 0; margin: 0 !important; }
+  .clinica-detalhe { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+  .clinica-detalhe > * { min-width: 0; margin: 0; }
+  .detalhe-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .detalhe-topo h2 { margin: 0; }
+  .detalhe-topo + * { margin-top: 10px; }
+  .fontes { margin-top: 14px; font-size: 13px; }
+  .suporte-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 4px 0 12px; }
+  .suporte-linha input { flex: 1; min-width: 200px; }
+  .historico { margin-top: 12px; }
+  .historico .linha-txt b .ponto { margin-right: 2px; }
+  .grupo-modulos { margin-top: 14px; }
+  .modulos { list-style: none; margin: 0; padding: 0; }
+  .modulo { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--linha); }
+  .modulo:first-child { border-top: 0; }
+  .modulo b { display: block; font-size: 13.5px; font-weight: 600; }
+  .modulo .nota { display: block; margin: 2px 0 0; }
+  .interruptor { flex: none; position: relative; width: 42px; height: 26px; border-radius: 999px; border: 0; background: rgba(18, 41, 64, .14); cursor: pointer; transition: background .2s; padding: 0; }
+  .interruptor::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--branco); box-shadow: 0 1px 3px rgba(18, 41, 64, .25); transition: transform .2s; }
+  .interruptor[aria-checked="true"] { background: var(--laranja); }
+  .interruptor[aria-checked="true"]::after { transform: translateX(16px); }
+  .interruptor:disabled { opacity: .5; cursor: default; }
+  .interruptor:focus-visible { outline: 2px solid var(--azul-escuro); outline-offset: 2px; }
+  .selo-espera.ok { color: var(--azul-escuro); background: rgba(51, 79, 115, .12); }
+  .linha-impl .linha-txt { flex-basis: 100%; }
+  .linha-impl .aprovacao { flex-basis: 100%; }
+  .linha-impl > .nota { flex-basis: 100%; margin: 0; }
+  .ficha { flex-basis: 100%; background: var(--cinza); border-radius: 12px; padding: 12px 14px; }
+  .ficha .rot, .previa .rot { margin-top: 12px; }
+  .ficha .rot:first-child, .previa .rot:first-child { margin-top: 0; }
+  .ficha .uso-lista li span:first-child, .previa .uso-lista li span:first-child { color: var(--azul-escuro); }
+  .passos { margin: 0; padding-left: 20px; font-size: 13px; display: grid; gap: 4px; }
+  .sql { font: 500 11.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; overflow-x: auto; white-space: pre; max-height: 220px; }
+  .fundo { position: fixed; inset: 0; background: rgba(18, 41, 64, .35); display: grid; place-items: start center; padding: 24px 16px; overflow-y: auto; z-index: 10; }
+  .janela { width: 100%; max-width: 560px; }
+  .janela h1 { margin: 0; }
+  .etapas { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 16px; counter-reset: etapa; }
+  .etapas li { counter-increment: etapa; font-size: 12px; font-weight: 600; color: var(--suave); background: var(--cinza); border-radius: 999px; padding: 4px 10px; }
+  .etapas li::before { content: counter(etapa) " · "; }
+  .etapas li.atual { background: var(--azul-escuro); color: var(--branco); }
+  .etapas li.feito { color: var(--azul-escuro); }
+  .dois { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+  .medicas { display: grid; gap: 6px; margin-bottom: 8px; }
+  .medicas .chave-linha input { background: var(--cinza); }
+  .rodape-assistente { justify-content: flex-end; margin-top: 16px; }
+  @media (max-width: 560px) {
+    .dois { grid-template-columns: 1fr; }
+    .suporte-linha input { min-width: 0; flex-basis: 100%; }
+    .fundo { padding: 0; place-items: stretch; }
+    .janela { max-width: none; min-height: 100%; border-radius: 0; }
+  }
   @media (max-width: 560px) {
     .criar-linha { flex-direction: column; }
     .botao-auto { width: 100%; }
