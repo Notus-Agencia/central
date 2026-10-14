@@ -1,4 +1,5 @@
-// Relatório "quem usou o BI e como" (aba Uso da Central): lê a chave de leitura do BI aqui no servidor e chama
+// Relatório "quem usou o BI e como" (aba Uso da Central): lê a chave de leitura do BI aqui no servidor (a automática,
+// que o próprio BI entrega pela central-registrar-bi, ou a colada à mão na aba BIs) e chama
 // GET {url}/api/v1/uso-pessoas com Authorization: Bearer <chave>. A chave nunca vai para o navegador.
 // Corpo: { bi_id: id | id[], dias?: 1..400 | desde?: "inicio" | de?: AAAA-MM-DD, ate?: AAAA-MM-DD }.
 // bi_id aceita uma lista (até 10) para, no futuro, juntar várias clínicas no mesmo relatório: hoje cada BI volta
@@ -39,7 +40,7 @@ async function lerUm(svc: SupabaseClient, id: string, q: URLSearchParams): Promi
   if (!bi || !bi.ativo) return { bi_id: id, nome: null, ok: false, erro: "BI não encontrado." };
   const base = { bi_id: id, nome: bi.nome as string };
   if (bi.tipo === "demo") return { ...base, ok: false, erro: "A demonstração não mede uso: os dados são fictícios e voltam ao padrão a cada entrada." };
-  if (!bi.chave_leitura) return { ...base, ok: false, erro: "BI sem chave. Cole a chave de leitura do uso na aba BIs." };
+  if (!bi.chave_leitura) return { ...base, ok: false, erro: "Este BI ainda não se ligou à Central. Ele se liga sozinho depois da próxima atualização." };
   const url = `${String(bi.url).replace(/\/+$/, "")}/api/v1/uso-pessoas?${q}`;
   const parar = new AbortController();
   const relogio = setTimeout(() => parar.abort(), TEMPO_MAXIMO_MS);
@@ -48,8 +49,8 @@ async function lerUm(svc: SupabaseClient, id: string, q: URLSearchParams): Promi
     const texto = await r.text();
     let d: Record<string, unknown> | null = null;
     try { d = JSON.parse(texto); } catch { d = null; }
-    if (r.status === 401) return { ...base, ok: false, erro: "Chave recusada: ela foi revogada ou não é deste BI. Crie outra no BI e cole de novo." };
-    if (r.status === 403) return { ...base, ok: false, erro: "Chave recusada: ela precisa ser criada por alguém com papel desenvolvedor." };
+    if (r.status === 401) return { ...base, ok: false, erro: "A chave deste BI foi trocada. Ele entrega outra sozinho em até um dia." };
+    if (r.status === 403) return { ...base, ok: false, erro: "Chave recusada: ela não lê o uso deste BI. Ele entrega outra sozinho em até um dia." };
     if (r.status === 400) return { ...base, ok: false, erro: (d && typeof d.erro === "string" ? d.erro : "Período inválido.") };
     if (r.status === 404 || (r.ok && !d)) return { ...base, ok: false, erro: "Este BI ainda não tem a leitura do uso (a versão nova não foi publicada) ou a API está desligada." };
     if (!r.ok || !d) return { ...base, ok: false, erro: "BI fora do ar agora. Tente de novo em instantes." };

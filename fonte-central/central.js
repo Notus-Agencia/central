@@ -236,12 +236,17 @@
         // enquanto o DNS não aponta, a demonstração abre no endereço do GitHub Pages
         var url = b.tipo === "demo" ? DEMO_URL : b.url;
         return el("li", { class: "linha" }, [
-          el("div", { class: "linha-txt" }, [el("b", { texto: b.nome }), el("span", { texto: url.replace(/^https:\/\//, "").replace(/\/$/, "") + " · " + (TIPOS_BI[b.tipo] || b.tipo) })]),
+          el("div", { class: "linha-txt" }, [
+            el("b", {}, [b.nome, b.aguardando_aprovacao ? el("span", { class: "selo-espera", texto: "Aguardando aprovação" }) : null]),
+            el("span", { texto: url.replace(/^https:\/\//, "").replace(/\/$/, "") + " · " + (TIPOS_BI[b.tipo] || b.tipo) }),
+            b.tipo === "clinica" ? el("span", { class: "ligacao" + (b.ligado_auto_em ? " ok" : ""), texto: textoLigacao(b) }) : null,
+          ]),
+          b.aguardando_aprovacao ? botoesAprovacao(b, secao, caixa) : null,
           // abre na mesma aba (o BI tem o botão "Central" para voltar); na demo, já entra com a conta de administrador
           b.tipo === "demo"
             ? el("button", { class: "botao-mini", type: "button", texto: "Entrar", onclick: function (ev) { entrarNaDemo(url, ev.currentTarget); } })
             : el("a", { class: "botao-mini", href: url, texto: "Abrir" }),
-          b.tipo === "clinica" ? campoChave(b) : null,
+          b.tipo === "clinica" && !b.aguardando_aprovacao ? planoB(b) : null,
         ]);
       })), caixa);
     }).catch(function () {
@@ -251,9 +256,34 @@
     });
   }
 
-  // lista de BIs ativos (tem_chave diz se há chave de leitura do uso; a chave em si nunca chega ao navegador)
+  // ── ligação automática (cada BI se registra sozinho pela função central-registrar-bi) ──
+  function textoLigacao(b) {
+    if (b.ligado_auto_em) return "Ligado automaticamente em " + dataHora(b.ligado_auto_em) + (b.versao ? " · versão " + b.versao : "");
+    return b.tem_chave ? "Chave colada à mão · o BI se liga sozinho depois da próxima atualização" : "Ainda não se ligou · o BI se liga sozinho depois da próxima atualização";
+  }
+  // BI novo que se registrou sozinho: entra na lista só depois de aprovado (função central-bi-aprovar)
+  function botoesAprovacao(b, secao, caixa) {
+    var erro = el("p", { class: "erro", role: "alert", hidden: true });
+    function decidir(recusar, botao, rotulo) {
+      if (recusar && !confirm("Recusar " + b.nome + "? O cadastro some; se o BI tentar de novo, volta a aguardar.")) return;
+      erro.hidden = true; botao.disabled = true; botao.textContent = "…";
+      funcao("central-bi-aprovar", recusar ? { bi_id: b.id, recusar: true } : { bi_id: b.id })
+        .then(function () { carregarBis(secao, secao.querySelector(".linhas") || caixa); })
+        .catch(function (e) { erro.textContent = e.message; erro.hidden = false; botao.disabled = false; botao.textContent = rotulo; });
+    }
+    var aprovar = el("button", { type: "button", class: "botao-mini forte", texto: "Aprovar", onclick: function () { decidir(false, aprovar, "Aprovar"); } });
+    var recusar = el("button", { type: "button", class: "botao-mini perigo", texto: "Recusar", onclick: function () { decidir(true, recusar, "Recusar"); } });
+    return el("div", { class: "aprovacao" }, [aprovar, recusar, erro]);
+  }
+  // a chave colada à mão fica como plano B, recolhida
+  function planoB(b) {
+    return el("details", { class: "plano-b" }, [el("summary", { texto: "Chave manual (plano B)" }), campoChave(b)]);
+  }
+
+  // lista de BIs: os ativos e os que se registraram sozinhos e aguardam aprovação (tem_chave diz se há chave de
+  // leitura do uso; a chave em si nunca chega ao navegador)
   function listaBis() {
-    return pedir("GET", "/rest/v1/central_bis?select=id,nome,url,tipo,tem_chave&ativo=is.true&order=ordem.asc,nome.asc", undefined, true).then(function (r) {
+    return pedir("GET", "/rest/v1/central_bis?select=id,nome,url,tipo,ativo,tem_chave,aguardando_aprovacao,ligado_auto_em,versao&or=(ativo.is.true,aguardando_aprovacao.is.true)&order=aguardando_aprovacao.desc,ordem.asc,nome.asc", undefined, true).then(function (r) {
       if (r.status === 401) { sairDaConta("Sua sessão terminou. Entre de novo."); return null; }
       if (r.status !== 200 || !Array.isArray(r.dados)) throw new Error();
       return r.dados;
@@ -293,7 +323,7 @@
     return el("div", { class: "chave-uso" }, [
       el("div", { class: "chave-topo" }, [el("label", { for: idCampo, class: "rotulo", texto: "Chave de leitura do uso" }), estado]),
       form, erro,
-      el("p", { class: "nota", texto: "Crie no BI em Ajustes › Chave de API e MCP, entrando como desenvolvedor." }),
+      el("p", { class: "nota", texto: "Só se a ligação automática falhar: crie no BI em Ajustes › Chave de API e MCP, entrando como desenvolvedor. Na próxima ligação automática, a chave do BI substitui esta." }),
     ]);
   }
 
@@ -320,7 +350,7 @@
     var relatorio = el("div", { class: "uso-relatorio", "aria-live": "polite" });
     listaBis().then(function (bis) {
       if (!bis) return;
-      var clinicas = bis.filter(function (b) { return b.tipo === "clinica"; });
+      var clinicas = bis.filter(function (b) { return b.tipo === "clinica" && b.ativo; });
       controles.innerHTML = "";
       if (!clinicas.length) { controles.appendChild(el("p", { class: "vazio", texto: "Nenhum BI de clínica cadastrado. A demonstração não mede uso." })); return; }
       if (!usoEstado.bi || !clinicas.some(function (b) { return b.id === usoEstado.bi; })) usoEstado.bi = clinicas[0].id;
@@ -366,8 +396,7 @@
     alvo.innerHTML = "";
     if (!bi.tem_chave) {
       alvo.appendChild(el("section", { class: "cartao" }, [el("div", { class: "aviso", role: "status" }, [
-        "Este BI ainda não tem a chave de leitura do uso. Crie no BI em Ajustes › Chave de API e MCP (entrando como desenvolvedor) e cole na aba ",
-        el("button", { type: "button", class: "link", texto: "BIs", onclick: function () { irPara("bis"); } }), ".",
+        "Este BI ainda não se ligou à Central. O BI se liga sozinho depois da próxima atualização.",
       ])]));
       return;
     }
