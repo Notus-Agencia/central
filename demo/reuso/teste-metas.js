@@ -99,15 +99,32 @@
     });
   });
   if (faltas[0].dia > HOJE) faltas = [];
+  // conferência (backend/src/modules/metas/conferencia.ts): o que é da semana de hoje espera a gestão; o de antes já foi
+  // confirmado (como a migração faz com as semanas encerradas)
+  var INICIO_SEMANA = somarDia(HOJE, -new Date(HOJE + "T12:00:00Z").getUTCDay());
+  function conferenciaInicial(d) { return d >= INICIO_SEMANA ? { conferencia: "a_conferir", motivo: null, conferido_por: null, conferido_em: null } : { conferencia: "confirmado", motivo: null, conferido_por: null, conferido_em: d + "T20:00:00Z" }; }
+  Object.keys(avaliacoes).forEach(function (d) { Object.assign(avaliacoes[d], conferenciaInicial(d)); });
+  cupons.forEach(function (c) { Object.assign(c, conferenciaInicial(c.dia)); });
+  // um cupom recusado no mês passado, para a tela mostrar o motivo
+  var recusavel = cupons.find(function (c) { return c.dia.slice(0, 7) === ANT; });
+  if (recusavel) Object.assign(recusavel, { conferencia: "recusado", motivo: "Cupom repetido", conferido_por: "Wellington" });
+  function estadoAoLancar() { return gestao ? { conferencia: "confirmado", motivo: null, conferido_por: eu.nome, conferido_em: new Date().toISOString() } : { conferencia: "a_conferir", motivo: null, conferido_por: null, conferido_em: null }; }
+  function confirmadoX(x) { return !x.conferencia || x.conferencia === "confirmado"; }
+  function pendentesDoPeriodo(ind, de, ate) {
+    if (ind === "avaliacoes_5") return Object.keys(avaliacoes).filter(function (d) { return d >= de && d <= ate && avaliacoes[d].conferencia === "a_conferir"; }).length;
+    if (ind === "nota_cupons") return cupons.filter(function (c) { return c.dia >= de && c.dia <= ate && c.conferencia === "a_conferir"; }).length;
+    return 0;
+  }
 
   // ── séries dos indicadores ──
   function serie(ind, inicio, fim) {
     var r = [];
     for (var d = inicio; d <= fim && d <= HOJE; d = somarDia(d, 1)) {
       var w = util(d), x = h(ind + d), v;
-      if (ind === "avaliacoes_5") { if (avaliacoes[d]) r.push({ dia: d, valor: avaliacoes[d].valor }); continue; }
+      // só o confirmado conta para o bônus
+      if (ind === "avaliacoes_5") { if (avaliacoes[d] && confirmadoX(avaliacoes[d])) r.push({ dia: d, valor: avaliacoes[d].valor }); continue; }
       if (ind === "nota_cupons") {
-        var cs = cupons.filter(function (c) { return c.dia === d && c.nota_recepcao != null; });
+        var cs = cupons.filter(function (c) { return c.dia === d && c.nota_recepcao != null && confirmadoX(c); });
         if (cs.length) { var s = cs.reduce(function (t, c) { return t + c.nota_recepcao; }, 0); r.push({ dia: d, valor: s / cs.length, qtd: cs.length, soma: s }); }
         continue;
       }
@@ -153,7 +170,7 @@
 
   function listaAvaliacoes(m) {
     return Object.keys(avaliacoes).filter(function (d) { return d.slice(0, 7) === m; }).sort().reverse()
-      .map(function (d) { return { dia: d, valor: avaliacoes[d].valor, por: avaliacoes[d].por, em: avaliacoes[d].em }; });
+      .map(function (d) { return { dia: d, valor: avaliacoes[d].valor, por: avaliacoes[d].por, em: avaliacoes[d].em, conferencia: avaliacoes[d].conferencia, motivo: avaliacoes[d].motivo }; });
   }
   function listaCupons(m) {
     return cupons.filter(function (c) { return c.dia.slice(0, 7) === m; })
@@ -215,29 +232,76 @@
     "grafico-barras", "grafico-linhas", "grafico-pizza", "grafico-dispersao", "grafico-funil", "grafico-treemap", "grafico-diario", "lista"];
 
   // alerta de semana em risco (cópia da regra de backend/src/modules/metas/alertas.ts, para a versão de teste)
+  function textoAConferir(ind, n) {
+    if (ind === "nota_cupons") return n + " " + (n === 1 ? "cupom" : "cupons") + " a conferir";
+    if (ind === "avaliacoes_5") return n + " " + (n === 1 ? "dia" : "dias") + " de avaliações a conferir";
+    return n + " lançamento" + (n === 1 ? "" : "s") + " a conferir";
+  }
   function alertaDaSemana(r, hoje, diasUteis) {
     var R = regras(), s = r.semanas.find(function (x) { return x.situacao === "andamento"; });
     if (!s) return null;
-    var falta = s.meta - s.feito;
-    if (falta <= 0) return null;
     var passados = 0, restantes = 0;
     for (var d = s.inicio; d <= s.fim; d = R.somarDias(d, 1)) { if (!R.diaUtil(d, diasUteis)) continue; if (d < hoje) passados++; else restantes++; }
+    var pend = pendentesDoPeriodo(r.indicador, s.inicio, s.fim);
+    var frase = pend > 0 ? " Há " + textoAConferir(r.indicador, pend) + ": só " + (pend === 1 ? "conta" : "contam") + " depois que a gestão confirmar." : "";
+    var nota = function (n) { return n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 }); };
+    if (s.pela_nota) {
+      var q = s.qtd || 0;
+      if (q > 0 && s.feito + 1e-9 >= s.meta) return null;
+      if (restantes === 0 || passados === 0) return null;
+      return { semana: s.n, meta: s.meta, feito: s.feito, falta: Math.round(Math.max(s.meta - s.feito, 0) * 10) / 10, dias_restantes: restantes, valor: s.valor,
+        ritmo_por_dia: null, precisa_por_dia: null, projecao: null, pela_nota: true,
+        texto: (q === 0 ? "Semana " + s.n + " em risco: nenhum cupom confirmado na semana ainda. A semana paga com média " + nota(s.meta) + " ou mais."
+          : "Semana " + s.n + " em risco: a média dos " + q + " cupo" + (q > 1 ? "ns" : "m") + " confirmado" + (q > 1 ? "s" : "") + " está em " + nota(s.feito) + ", abaixo da meta " + nota(s.meta) + ".") + frase };
+    }
+    var falta = s.meta - s.feito;
+    if (falta <= 0) return null;
+    if (restantes === 0 || passados === 0) return null;
     var un = (R.indicadorPorChave(r.indicador) || {}).unidade || "";
     var fmt = function (n) { return Number.isInteger(n) ? String(n) : n.toLocaleString("pt-BR", { maximumFractionDigits: 1 }); };
-    var base = { semana: s.n, meta: s.meta, feito: s.feito, falta: falta, dias_restantes: restantes, valor: s.valor };
-    if (restantes === 0) return Object.assign(base, { ritmo_por_dia: null, precisa_por_dia: null, projecao: null, texto: "Semana " + s.n + " em risco: faltam " + fmt(falta) + " " + un + " e não sobra dia útil até " + s.fim.slice(8, 10) + "/" + s.fim.slice(5, 7) + "." });
-    if (passados === 0) return null;
     var ritmo = s.feito / passados, proj = s.feito + ritmo * restantes;
     if (proj + 1e-9 >= s.meta) return null;
     var precisa = falta / restantes;
-    return Object.assign(base, { ritmo_por_dia: ritmo, precisa_por_dia: precisa, projecao: proj,
-      texto: "Semana " + s.n + " em risco: no ritmo desta semana (" + fmt(Math.round(ritmo * 10) / 10) + " por dia) fecha em " + fmt(Math.floor(proj)) + " de " + fmt(s.meta) + " " + un + ". Faltam " + fmt(falta) + " em " + restantes + " dia" + (restantes > 1 ? "s" : "") + " út" + (restantes > 1 ? "eis" : "il") + " — " + fmt(Math.ceil(precisa * 10) / 10) + " por dia." });
+    return { semana: s.n, meta: s.meta, feito: s.feito, falta: falta, dias_restantes: restantes, valor: s.valor, ritmo_por_dia: ritmo, precisa_por_dia: precisa, projecao: proj,
+      texto: "Semana " + s.n + " em risco: no ritmo desta semana (" + fmt(Math.round(ritmo * 10) / 10) + " por dia) fecha em " + fmt(Math.floor(proj)) + " de " + fmt(s.meta) + " " + un + ". Faltam " + fmt(falta) + " em " + restantes + " dia" + (restantes > 1 ? "s" : "") + " út" + (restantes > 1 ? "eis" : "il") + " — " + fmt(Math.ceil(precisa * 10) / 10) + " por dia." + frase };
   }
   function alertasDe(r) {
     var a = {};
     if (!r || r.fechado || !r.pessoas) return a;
     r.pessoas.forEach(function (p) { var x = alertaDaSemana(p, r.hoje, r.parametros.dias_uteis_semana); if (x) a[p.pessoa_id] = x; });
     return a;
+  }
+
+  // ── conferência dos lançamentos à mão (GET/POST /api/bonus/conferencia) ──
+  function itensConferencia(m) {
+    var its = [];
+    Object.keys(avaliacoes).filter(function (d) { return d.slice(0, 7) === m; }).forEach(function (d) {
+      var a = avaliacoes[d];
+      its.push({ chave: "avaliacao:" + d, tipo: "avaliacao", indicador: "avaliacoes_5", dia: d, valor: a.valor, nota_whatsapp: null, nota_procedimento: null, quem_atendeu: null, comentario: null,
+        por: a.por, em: a.em, conferencia: a.conferencia, motivo: a.motivo, conferido_por: a.conferido_por, conferido_em: a.conferido_em });
+    });
+    cupons.filter(function (c) { return c.dia.slice(0, 7) === m; }).forEach(function (c) {
+      its.push({ chave: "cupom:" + c.id, tipo: "cupom", indicador: "nota_cupons", dia: c.dia, valor: c.nota_recepcao, nota_whatsapp: c.nota_whatsapp, nota_procedimento: c.nota_procedimento,
+        quem_atendeu: c.quem_atendeu, comentario: c.comentario, por: c.por, em: c.em, conferencia: c.conferencia, motivo: c.motivo, conferido_por: c.conferido_por, conferido_em: c.conferido_em });
+    });
+    return its.sort(function (a, b) {
+      var pa = a.conferencia === "a_conferir", pb = b.conferencia === "a_conferir";
+      if (pa !== pb) return pa ? -1 : 1;
+      if (pa) return a.dia < b.dia ? -1 : a.dia > b.dia ? 1 : 0;
+      return (b.conferido_em || "") < (a.conferido_em || "") ? -1 : 1;
+    });
+  }
+  function pendentesAbertos() {
+    var porMes = {};
+    Object.keys(meses).forEach(function (m) {
+      resultado(m);
+      if (meses[m].fechado) return;
+      var av = Object.keys(avaliacoes).filter(function (d) { return d.slice(0, 7) === m && avaliacoes[d].conferencia === "a_conferir"; }).length;
+      var cp = cupons.filter(function (c) { return c.dia.slice(0, 7) === m && c.conferencia === "a_conferir"; }).length;
+      if (av + cp) porMes[m] = { mes: m, total: av + cp, avaliacoes: av, cupons: cp };
+    });
+    var lista = Object.keys(porMes).sort().map(function (k) { return porMes[k]; });
+    return { total: lista.reduce(function (t, x) { return t + x.total; }, 0), meses: lista };
   }
 
   function rota(metodo, caminho, busca, b) {
@@ -300,10 +364,44 @@
       if (m[2] === "reabrir") { cm.fechado = null; cm.fechamento = null; cm.fecharNoInicio = false; return [200, { ok: true }]; }
       if (cm.fechado) return [409, { erro: "Este mês já foi fechado." }];
       if (HOJE <= ultimoDia(m[1])) return [422, { erro: "O mês só pode ser fechado depois do último dia." }];
+      var pf = pendentesDoPeriodo("avaliacoes_5", m[1] + "-01", ultimoDia(m[1])) + pendentesDoPeriodo("nota_cupons", m[1] + "-01", ultimoDia(m[1]));
+      if (pf) return [422, { erro: "Há " + pf + " lançamento" + (pf > 1 ? "s" : "") + " a conferir em " + m[1].slice(5, 7) + "/" + m[1].slice(0, 4) + ". Confirme ou recuse em Lançamentos antes de fechar o mês." }];
       cm.fechamento = calcular(m[1]); cm.fechado = { em: new Date().toISOString(), por: eu.nome };
       return [200, { ok: true, a_pagar: cm.fechamento.totais.a_pagar }];
     }
-    if ((m = caminho.match(/^\/api\/bonus\/resultado\/(\d{4}-\d{2})$/))) { var rr = resultado(m[1]); return [200, rr ? Object.assign(rr, { alertas: alertasDe(rr) }) : { mes: m[1], vazio: true }]; }
+    if ((m = caminho.match(/^\/api\/bonus\/resultado\/(\d{4}-\d{2})$/))) {
+      var rr = resultado(m[1]);
+      if (!rr) return [200, { mes: m[1], vazio: true }];
+      var ini = m[1] + "-01", fimM = ultimoDia(m[1]);
+      return [200, Object.assign(rr, { alertas: alertasDe(rr), a_conferir: rr.fechado ? { avaliacoes_5: 0, nota_cupons: 0 } : { avaliacoes_5: pendentesDoPeriodo("avaliacoes_5", ini, fimM), nota_cupons: pendentesDoPeriodo("nota_cupons", ini, fimM) } })];
+    }
+    if (caminho === "/api/bonus/conferencia" && metodo === "GET") return [200, pendentesAbertos()];
+    if ((m = caminho.match(/^\/api\/bonus\/conferencia\/(\d{4}-\d{2})$/))) {
+      var mc = meses[m[1]];
+      if (mc) resultado(m[1]);
+      return [200, { mes: m[1], existe: !!mc, fechado: !!(mc && mc.fechado), itens: itensConferencia(m[1]) }];
+    }
+    if (caminho === "/api/bonus/conferencia" && metodo === "POST") {
+      var acao = b.acao, its = Array.isArray(b.itens) ? b.itens : [];
+      if (["confirmar", "recusar", "desfazer"].indexOf(acao) < 0) return [422, { erro: "Ação inválida (confirmar, recusar ou desfazer)." }];
+      if (!its.length) return [422, { erro: "Escolha pelo menos um lançamento." }];
+      var mot = String(b.motivo || "").replace(/\s+/g, " ").trim();
+      if (acao === "recusar" && mot.length < 2) return [422, { erro: "Diga o motivo da recusa (uma frase curta)." }];
+      var alvos = its.map(function (k) {
+        var x = /^avaliacao:(\d{4}-\d{2}-\d{2})$/.exec(k), y = /^cupom:(\d+)$/.exec(k);
+        return x ? avaliacoes[x[1]] && Object.assign(avaliacoes[x[1]], { _dia: x[1] }) : y ? cupons.find(function (c) { return c.id === +y[1]; }) : null;
+      }).filter(Boolean);
+      for (var i = 0; i < alvos.length; i++) {
+        var mm = (alvos[i].dia || alvos[i]._dia).slice(0, 7);
+        resultado(mm);
+        if (meses[mm] && meses[mm].fechado) return [409, { erro: "Este mês já foi fechado. Para mudar, a gestão precisa reabrir o mês." }];
+      }
+      alvos.forEach(function (x) {
+        if (acao === "desfazer") Object.assign(x, { conferencia: "a_conferir", motivo: null, conferido_por: null, conferido_em: null });
+        else Object.assign(x, { conferencia: acao === "confirmar" ? "confirmado" : "recusado", motivo: acao === "recusar" ? mot.slice(0, 140) : null, conferido_por: eu.nome, conferido_em: new Date().toISOString() });
+      });
+      return [200, { ok: true, alterados: alvos.length }];
+    }
 
     // Pessoas e acessos é um cadastro só: a lista de acessos inclui o acesso de colaborador de quem está nas metas
     if (caminho === "/api/usuarios" && metodo === "GET" && gestao) {
@@ -370,7 +468,7 @@
       var bat = dm && dm.resultado && dm.mes === MES && !(dm.contexto && dm.contexto.fechado) && regras().semanasBatidas
         ? regras().semanasBatidas(dm.resultado).filter(function (s) { return vistas.indexOf(s.inicio) < 0; }) : [];
       if (dm && pm[0] === 200) dm.celebracao = bat.length ? { indicador: dm.resultado.indicador, tipo: dm.resultado.tipo,
-        semanas: bat.map(function (s) { return { n: s.n, inicio: s.inicio, fim: s.fim, meta: s.meta, feito: s.feito, valor: s.valor, paga: s.situacao === "paga" }; }) } : null;
+        semanas: bat.map(function (s) { return Object.assign({ n: s.n, inicio: s.inicio, fim: s.fim, meta: s.meta, feito: s.feito, valor: s.valor, paga: s.situacao === "paga" }, s.pela_nota ? { pela_nota: true, qtd: s.qtd || 0 } : {}); }) } : null;
       return pm;
     }
     if ((m = caminho.match(/^\/api\/bonus\/pessoa\/(\d+)$/))) return pagina(+m[1], busca.get("mes"));
@@ -381,7 +479,10 @@
       if (b.valor === "" || b.valor == null) { delete avaliacoes[b.dia]; return [200, { ok: true }]; }
       var v = Number(b.valor);
       if (!(Number.isInteger(v) && v >= 0 && v <= 500)) return [422, { erro: "Informe um número inteiro de avaliações." }];
-      avaliacoes[b.dia] = { valor: v, por: eu.nome, por_id: eu.id, em: new Date().toISOString() };
+      var antes = avaliacoes[b.dia];
+      // o mesmo número mantém a conferência; outro número (ou a gestão lançando) decide de novo
+      var conf = !gestao && antes && antes.valor === v ? { conferencia: antes.conferencia, motivo: antes.motivo, conferido_por: antes.conferido_por, conferido_em: antes.conferido_em } : estadoAoLancar();
+      avaliacoes[b.dia] = Object.assign({ valor: v, por: eu.nome, por_id: eu.id, em: new Date().toISOString() }, conf);
       return [200, { ok: true }];
     }
     if (caminho === "/api/bonus/cupons" && metodo === "POST") {
@@ -389,7 +490,7 @@
       try { cn = lerCupom(b); } catch (x) { return [422, { erro: x.message }]; }
       var e2 = erroLancar("nota_cupons", cn.dia);
       if (e2) return e2;
-      cupons.push(Object.assign({ id: proximoCupom++, por: eu.nome, por_id: eu.id, em: new Date().toISOString() }, cn));
+      cupons.push(Object.assign({ id: proximoCupom++, por: eu.nome, por_id: eu.id, em: new Date().toISOString() }, cn, estadoAoLancar()));
       return [201, { id: proximoCupom - 1 }];
     }
     if ((m = caminho.match(/^\/api\/bonus\/cupons\/(\d+)$/))) {
@@ -403,7 +504,7 @@
       try { cc = lerCupom(b); } catch (x) { return [422, { erro: x.message }]; }
       var e4 = erroLancar("nota_cupons", cc.dia);
       if (e4) return e4;
-      Object.assign(cp, cc);
+      Object.assign(cp, cc, estadoAoLancar());
       return [200, { ok: true }];
     }
     if ((m = caminho.match(/^\/api\/bonus\/lancamentos\/(\d{4}-\d{2})$/))) {
