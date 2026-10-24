@@ -8,9 +8,7 @@
   var SUPABASE = "https://kwysrvuvgdovmwhptqaw.supabase.co";
   var CHAVE_PUBLICA = "sb_publishable_xq34BKVIUMI-18n21-Cnmw_QE8vQvuF";
   var CHAVE_SESSAO = "gsc-central:sessao";
-  var NO_DOMINIO = /(^|\.)gestaosemcaos\.com\.br$/.test(location.hostname);
-  // enquanto o DNS não aponta, a demonstração fica no endereço do GitHub Pages
-  var DEMO_URL = NO_DOMINIO ? "https://demo.gestaosemcaos.com.br" : "https://wellington-dotcom.github.io/bi-demo/";
+  var DEMO_URL = "https://demo.gestaosemcaos.com.br";
 
   // BIs: vêm da tabela central_bis (RLS: só administradores leem). Nada da lista fica neste código.
   var TIPOS_BI = { clinica: "Cliente", demo: "Dados fictícios" };

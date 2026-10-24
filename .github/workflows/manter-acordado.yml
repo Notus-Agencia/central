@@ -1,0 +1,25 @@
+# Mantém o Supabase da Central acordado (o plano grátis pausa depois de 7 dias sem uso): a cada 2 dias chama a função
+# central_vivo, que só devolve a hora. Usa a chave pública (a mesma do site); nenhum segredo.
+# Atenção: o GitHub desliga agendamentos de repositório público depois de 60 dias sem commit. Se isso acontecer, ele
+# avisa por e-mail; basta religar em Actions › Manter acordado.
+name: Manter acordado
+on:
+  schedule:
+    - cron: "17 9 */2 * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chamar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Chamar central_vivo
+        env:
+          URL: https://kwysrvuvgdovmwhptqaw.supabase.co
+          CHAVE: sb_publishable_xq34BKVIUMI-18n21-Cnmw_QE8vQvuF
+        run: |
+          resposta=$(curl -sS --retry 3 --retry-delay 20 -w ' %{http_code}' -X POST "$URL/rest/v1/rpc/central_vivo" \
+            -H "apikey: $CHAVE" -H "Content-Type: application/json" -d '{}')
+          echo "$resposta"
+          case "$resposta" in *" 200") ;; *) echo "A Central não respondeu como esperado"; exit 1;; esac

@@ -81,3 +81,11 @@ Tudo o que é externo está isolado em `supabase/functions/_hospedagem.ts`, cham
   administrador de teste, que é apagado depois.
 
 No front fica só a chave pública (publishable) do Supabase. Nenhum segredo neste repositório.
+
+## Onde fica e como fica acordada
+
+- Repositórios `Notus-Agencia/central` (este) e `Notus-Agencia/bi-demo`, desde 24/10/2026; os endereços
+  `central.gestaosemcaos.com.br` e `demo.gestaosemcaos.com.br` não mudaram.
+- O plano grátis do Supabase pausa o projeto depois de 7 dias sem uso. O workflow `manter-acordado.yml` chama a função
+  `central_vivo` (só devolve a hora) a cada 2 dias. O GitHub desliga agendamentos de repositório público depois de 60
+  dias sem commit: se chegar o e-mail avisando, religar em Actions › Manter acordado.
