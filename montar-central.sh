@@ -10,6 +10,6 @@ import json, sys
 m = open(sys.argv[1], encoding="utf-8").read(); logo = open(sys.argv[2], encoding="utf-8").read()
 open(sys.argv[3], "w", encoding="utf-8").write(m.replace("{{LOGO_JSON}}", json.dumps(logo)))
 PY
-mkdir -p "$OUT/briefing"; cp "$AQUI/fonte-central/briefing/index.html" "$AQUI/fonte-central/briefing/briefing.js" "$OUT/briefing/"
+mkdir -p "$OUT/briefing"; cp "$AQUI/fonte-central/briefing/index.html" "$AQUI/fonte-central/briefing/briefing.js" "$AQUI"/comum/briefing/* "$OUT/briefing/"
 for f in central.js perguntas-briefing.js briefing/briefing.js; do node --check "$OUT/$f"; done
 echo "central montada em $OUT"
