@@ -101,17 +101,19 @@
 
   function telaLogin(aviso, tipoAviso) {
     var erro = el("p", { class: "erro", role: "alert", hidden: true });
-    var email = el("input", { type: "email", autocomplete: "username", required: true, inputmode: "email", autocapitalize: "none", spellcheck: "false" });
+    // "username webauthn": o campo de e-mail oferece a chave de acesso guardada no aparelho (ofertarChave)
+    var email = el("input", { type: "email", autocomplete: "username webauthn", required: true, inputmode: "email", autocapitalize: "none", spellcheck: "false" });
     var senha = el("input", { type: "password", autocomplete: "current-password", required: true });
     var botao = el("button", { class: "botao", type: "submit", texto: "Entrar" });
     var form = el("form", { novalidate: true, onsubmit: function (ev) {
       ev.preventDefault();
       if (!email.value.trim() || !senha.value) { erro.textContent = "Preencha o e-mail e a senha."; erro.hidden = false; return; }
       botao.disabled = true; botao.textContent = "Entrando…"; erro.hidden = true;
+      cancelarChave();
       pedir("POST", "/auth/v1/token?grant_type=password", { email: email.value.trim().toLowerCase(), password: senha.value }).then(function (r) {
         if (r.status !== 200) throw new Error(r.status === 429 ? "Muitas tentativas. Espere um pouco." : r.status >= 500 ? "Não consegui falar com o servidor." : "E-mail ou senha não conferem.");
-        gravarSessao(r.dados); return confirmarAdmin();
-      }).catch(function (e) { erro.textContent = e.message; erro.hidden = false; botao.disabled = false; botao.textContent = "Entrar"; });
+        gravarSessao(r.dados); return confirmarAdmin().then(guardarChaveSozinho);
+      }).catch(function (e) { erro.textContent = e.message; erro.hidden = false; botao.disabled = false; botao.textContent = "Entrar"; ofertarChave(erro); });
     } }, [
       el("label", { class: "campo" }, [el("span", { texto: "E-mail" }), email]),
       el("label", { class: "campo" }, [el("span", { texto: "Senha" }), senha]),
@@ -122,6 +124,107 @@
       aviso ? el("div", { class: "aviso " + (tipoAviso || ""), role: "status", texto: aviso }) : null, form, el("div", { class: "rodape" }, [esqueci]),
     ]));
     setTimeout(function () { (email.value ? senha : email).focus(); }, 30);
+    ofertarChave(erro);
+  }
+
+  // ── chave de acesso (passkey; função central-chave-acesso; SimpleWebAuthn em webauthn-13.3.0.min.js) ──
+  // Sem botão na tela de entrar (pedido do dono): o navegador oferece a chave no campo de e-mail e, depois da senha, guarda uma sozinho.
+  var W = window.SimpleWebAuthnBrowser;
+  function chave(corpo, comToken) { return pedir("POST", "/functions/v1/central-chave-acesso", corpo, comToken).then(function (r) { return r.dados || {}; }); }
+  function cancelarChave() { try { if (W && W.WebAuthnAbortService) W.WebAuthnAbortService.cancelCeremony(); } catch (e) { /* segue */ } }
+  function ofertarChave(erro) {
+    if (!W || !W.browserSupportsWebAuthnAutofill) return;
+    W.browserSupportsWebAuthnAutofill().then(function (pode) {
+      if (!pode) return;
+      return chave({ acao: "entrar-opcoes" }).then(function (o) {
+        if (!o || !o.challenge) return;
+        return W.startAuthentication({ optionsJSON: o, useBrowserAutofill: true }).then(function (resposta) {
+          return chave({ acao: "entrar", resposta: resposta });
+        }).then(function (r) {
+          if (!r.ok || !r.token_hash) throw new Error("chave");
+          return pedir("POST", "/auth/v1/verify", { type: "magiclink", token_hash: r.token_hash });
+        }).then(function (r) {
+          if (r.status !== 200 || !r.dados || !r.dados.access_token) throw new Error("chave");
+          gravarSessao(r.dados); return confirmarAdmin();
+        });
+      });
+    }).catch(function (e) {
+      if (e && (e.name === "AbortError" || e.name === "NotAllowedError")) return;
+      if (erro) { erro.textContent = "Não deu para entrar com a chave de acesso. Entre com a senha."; erro.hidden = false; }
+    });
+  }
+  function guardarChaveSozinho() {
+    if (!eu || !W || !W.browserSupportsWebAuthn || !W.browserSupportsWebAuthn()) return;
+    chave({ acao: "criar-opcoes" }, true).then(function (o) {
+      if (!o || !o.challenge) return;
+      return W.startRegistration({ optionsJSON: o, useAutoRegister: true }).then(function (resposta) { return chave({ acao: "criar", resposta: resposta }, true); });
+    }).catch(function () { /* o navegador decide; sem chave, segue a senha */ });
+  }
+
+  // ── Segurança (pedido do dono: em todo site, trocar a senha e a chave de acesso no mesmo lugar) ──
+  function painelSeguranca() {
+    var caixa = el("div", { class: "clinicas" });
+    var erroSenha = el("p", { class: "erro", role: "alert", hidden: true });
+    var okSenha = el("p", { class: "nota", role: "status", hidden: true });
+    var s1 = el("input", { type: "password", autocomplete: "new-password", minlength: "8" });
+    var s2 = el("input", { type: "password", autocomplete: "new-password", minlength: "8" });
+    var salvar = el("button", { class: "botao botao-auto", type: "submit", texto: "Trocar a senha" });
+    caixa.appendChild(el("section", { class: "cartao" }, [
+      el("h2", { texto: "Senha" }),
+      el("form", { novalidate: true, onsubmit: function (ev) {
+        ev.preventDefault(); erroSenha.hidden = true; okSenha.hidden = true;
+        if (s1.value.length < 8) { erroSenha.textContent = "Use pelo menos 8 caracteres."; erroSenha.hidden = false; return; }
+        if (s1.value !== s2.value) { erroSenha.textContent = "As duas senhas não estão iguais."; erroSenha.hidden = false; return; }
+        salvar.disabled = true;
+        pedir("PUT", "/auth/v1/user", { password: s1.value }, true).then(function (r) {
+          if (r.status !== 200) throw new Error((r.dados && (r.dados.msg || r.dados.message)) ? "Não aceitou essa senha: " + (r.dados.msg || r.dados.message) : "Não consegui trocar agora.");
+          s1.value = ""; s2.value = ""; okSenha.textContent = "Senha trocada."; okSenha.hidden = false;
+        }).catch(function (e) { erroSenha.textContent = e.message; erroSenha.hidden = false; }).then(function () { salvar.disabled = false; });
+      } }, [
+        el("label", { class: "campo" }, [el("span", { texto: "Nova senha" }), s1]),
+        el("label", { class: "campo" }, [el("span", { texto: "Repita a senha" }), s2]), erroSenha, okSenha, salvar,
+      ]),
+    ]));
+    var lista = el("ul", { class: "linhas" });
+    var msg = el("p", { class: "nota", role: "status" });
+    var criar = el("button", { type: "button", class: "botao-mini forte", texto: "Criar chave de acesso neste aparelho", hidden: true, onclick: function () {
+      criar.disabled = true; msg.textContent = "";
+      chave({ acao: "criar-opcoes" }, true).then(function (o) {
+        if (o && o.erro === "limite") throw new Error("limite");
+        if (!o || !o.challenge) throw new Error("rede");
+        return W.startRegistration({ optionsJSON: o });
+      }).then(function (resposta) { return chave({ acao: "criar", resposta: resposta }, true); }).then(function (r) {
+        if (!r.ok) throw new Error("criar");
+        mostrar(r.aparelhos); msg.textContent = "Chave de acesso criada. Na próxima vez, toque no campo de e-mail e escolha a chave.";
+      }).catch(function (x) {
+        var n = x && x.name, m = x && x.message;
+        if (n === "NotAllowedError" || n === "AbortError") return;
+        msg.textContent = n === "InvalidStateError" ? "Este aparelho já tem uma chave de acesso." : m === "limite" ? "Já são 10 aparelhos. Tire um antes de criar outro." : "Não deu para criar a chave de acesso. Tente de novo.";
+      }).then(function () { criar.disabled = false; });
+    } });
+    function mostrar(aparelhos) {
+      lista.innerHTML = "";
+      if (!aparelhos || !aparelhos.length) { lista.appendChild(el("li", { class: "linha" }, [el("span", { class: "vazio", texto: "Nenhuma chave de acesso ainda." })])); return; }
+      aparelhos.forEach(function (a) {
+        var tirar = el("button", { type: "button", class: "botao-mini", texto: "Tirar", onclick: function () {
+          tirar.disabled = true;
+          chave({ acao: "tirar", id: a.id }, true).then(function (r) { if (!r.ok) throw new Error(); mostrar(r.aparelhos); msg.textContent = "Chave de acesso tirada."; })
+            .catch(function () { tirar.disabled = false; msg.textContent = "Não deu para tirar agora. Tente de novo."; });
+        } });
+        lista.appendChild(el("li", { class: "linha" }, [
+          el("div", { class: "linha-txt" }, [el("b", { texto: a.apelido }), el("span", { texto: "Criada em " + dataHora(a.criado_em) + (a.usado_em ? " · último uso " + dataHora(a.usado_em) : "") })]),
+          tirar,
+        ]));
+      });
+    }
+    caixa.appendChild(el("section", { class: "cartao" }, [
+      el("div", { class: "detalhe-topo" }, [el("h2", { texto: "Chave de acesso" }), criar]),
+      el("p", { class: "nota", texto: "Entre com a digital ou o rosto, sem digitar a senha. Na tela de entrar, toque no campo de e-mail e escolha a chave. A senha continua valendo." }),
+      lista, msg,
+    ]));
+    chave({ acao: "listar" }, true).then(function (r) { if (r.ok) mostrar(r.aparelhos); }).catch(function () { msg.textContent = "Não consegui carregar as chaves agora."; });
+    if (W && W.platformAuthenticatorIsAvailable) W.platformAuthenticatorIsAvailable().then(function (tem) { criar.hidden = !tem; }).catch(function () {});
+    return caixa;
   }
 
   function telaRecuperar(emailInicial) {
@@ -193,6 +296,9 @@
     var topo = el("header", { class: "topo" }, [
       logo(),
       el("div", { class: "quem" }, [el("span", { texto: eu && eu.email ? eu.email : "" }),
+        el("button", { class: "link", type: "button", texto: "Segurança", onclick: function () {
+          aba = "seguranca"; document.querySelectorAll(".aba").forEach(function (b) { b.setAttribute("aria-selected", "false"); }); desenharAba();
+        } }),
         el("button", { class: "link", type: "button", texto: "Sair", onclick: function () { sairDaConta(); } })]),
     ]);
     var corpo = el("div", { id: "corpo" });
@@ -211,6 +317,7 @@
     if (aba === "clinicas") corpo.appendChild(painelClinicas());
     else if (aba === "bis") corpo.appendChild(painelBis());
     else if (aba === "uso") corpo.appendChild(painelUso());
+    else if (aba === "seguranca") corpo.appendChild(painelSeguranca());
     else { corpo.appendChild(painelCriar()); corpo.appendChild(el("div", { id: "lista" })); carregarAcessos(); }
   }
 
@@ -561,7 +668,9 @@
   function painelClinicas() {
     var lista = el("section", { class: "cartao" }, [el("h2", { texto: "Clínicas" }), el("p", { class: "vazio", role: "status", texto: "Carregando…" })]);
     var implantacoes = el("section", { class: "cartao" }, [el("p", { class: "vazio", texto: "Carregando as implantações…" })]);
-    var caixa = el("div", { class: "clinicas" }, [lista, implantacoes]);
+    var briefings = el("section", { class: "cartao" }, [el("p", { class: "vazio", texto: "Carregando os briefings…" })]);
+    var caixa = el("div", { class: "clinicas" }, [lista, implantacoes, briefings]);
+    desenharBriefings(briefings);
     listaBis().then(function (bis) {
       if (!bis) return;
       var clinicas = bis.filter(function (b) { return b.tipo === "clinica" && b.ativo; });
@@ -759,6 +868,91 @@
       if (!r.dados.length) { secao.appendChild(el("p", { class: "vazio", texto: "Nenhuma clínica nova em implantação." })); return; }
       secao.appendChild(el("ul", { class: "linhas" }, r.dados.map(function (imp) { return linhaImplantacao(imp, secao, clinicas); })));
     }).catch(function () { secao.innerHTML = ""; secao.appendChild(el("p", { class: "erro", texto: "Não consegui carregar as implantações agora." })); });
+  }
+
+  // ── Briefings por link (função central-briefing; perguntas em perguntas-briefing.js) ──
+  var PERGUNTAS_BRIEFING = window.BRIEFING_PERGUNTAS || [];
+  var briefingAberto = null;
+  function linkBriefing(b) { return location.origin + "/briefing/#c=" + b.codigo; }
+  function temValor(v) { return Array.isArray(v) ? v.length > 0 : !!(v && String(v).trim()); }
+  function campoVisivel(c, r) { return !c.mostrarSe || Object.keys(c.mostrarSe).every(function (k) { return r[k] === c.mostrarSe[k]; }); }
+  function respondidas(r) {
+    return PERGUNTAS_BRIEFING.filter(function (p) { return p.campos.some(function (c) { return campoVisivel(c, r) && temValor(r[c.id]); }); }).length;
+  }
+  function situacaoBriefing(b) {
+    var n = respondidas(b.respostas || {}), total = PERGUNTAS_BRIEFING.length;
+    if (b.enviado_em) return { texto: "Enviado em " + dataHora(b.enviado_em) + " · " + n + " de " + total, ok: true };
+    if (b.atualizado_em) return { texto: "Respondendo · " + n + " de " + total + " · última resposta " + relativo(b.atualizado_em) };
+    if (b.aberto_em) return { texto: "Abriu o link " + relativo(b.aberto_em) + ", sem resposta ainda" };
+    return { texto: "Link ainda não aberto" };
+  }
+  function desenharBriefings(secao) {
+    pedir("GET", "/rest/v1/central_briefings?select=id,clinica,codigo,respostas,criado_em,aberto_em,atualizado_em,enviado_em&arquivado_em=is.null&order=criado_em.desc&limit=50", undefined, true).then(function (r) {
+      if (r.status !== 200 || !Array.isArray(r.dados)) throw new Error();
+      secao.innerHTML = "";
+      var form = formNovoBriefing(secao);
+      secao.appendChild(el("div", { class: "detalhe-topo" }, [el("h2", { texto: "Briefings" + (r.dados.length ? " · " + r.dados.length : "") }),
+        el("button", { type: "button", class: "botao-mini forte", texto: "Novo briefing", onclick: function () { form.hidden = !form.hidden; if (!form.hidden) form.querySelector("input").focus(); } })]));
+      secao.appendChild(el("p", { class: "nota", texto: "A clínica responde por um link, sem login. As respostas aparecem aqui e chega um e-mail quando ela envia." }));
+      secao.appendChild(form);
+      if (!r.dados.length) { secao.appendChild(el("p", { class: "vazio", texto: "Nenhum briefing ainda." })); return; }
+      secao.appendChild(el("ul", { class: "linhas" }, r.dados.map(function (b) { return linhaBriefing(b, secao); })));
+    }).catch(function () { secao.innerHTML = ""; secao.appendChild(el("p", { class: "erro", texto: "Não consegui carregar os briefings agora." })); });
+  }
+  function formNovoBriefing(secao) {
+    var erro = el("p", { class: "erro", role: "alert", hidden: true });
+    var nome = el("input", { type: "text", maxlength: "120", autocomplete: "off", placeholder: "Ex.: Clínica Dr. Fulano" });
+    var botao = el("button", { class: "botao botao-auto", type: "submit", texto: "Criar link" });
+    return el("form", { class: "form-linha", hidden: true, novalidate: true, onsubmit: function (ev) {
+      ev.preventDefault();
+      if (nome.value.trim().length < 2) { erro.textContent = "Diga o nome da clínica."; erro.hidden = false; return; }
+      botao.disabled = true; erro.hidden = true;
+      funcao("central-briefing", { acao: "criar", clinica: nome.value.trim() }).then(function (r) {
+        briefingAberto = r.briefing.id; desenharBriefings(secao);
+      }).catch(function (e) { erro.textContent = e.message; erro.hidden = false; botao.disabled = false; });
+    } }, [el("label", { class: "campo" }, [el("span", { texto: "Nome da clínica" }), nome]), botao, erro]);
+  }
+  function linhaBriefing(b, secao) {
+    var s = situacaoBriefing(b);
+    var respostas = el("div", { class: "ficha", hidden: briefingAberto !== b.id });
+    if (briefingAberto === b.id) desenharRespostas(respostas, b.respostas || {});
+    var copiarLink = el("button", { type: "button", class: "botao-mini", texto: "Copiar link", onclick: function () { copiar(linkBriefing(b), copiarLink); } });
+    var arquivar = el("button", { type: "button", class: "botao-mini", texto: "Arquivar", onclick: function () {
+      arquivar.disabled = true;
+      funcao("central-briefing", { acao: "arquivar", id: b.id }).then(function () {
+        linha.replaceChildren(el("div", { class: "linha-txt" }, [el("span", { texto: b.clinica + " · arquivado" })]),
+          el("button", { type: "button", class: "link", texto: "Desfazer", onclick: function () {
+            funcao("central-briefing", { acao: "arquivar", id: b.id, desfazer: true }).then(function () { desenharBriefings(secao); }).catch(function (e) { alert(e.message); });
+          } }));
+      }).catch(function (e) { arquivar.disabled = false; alert(e.message); });
+    } });
+    var linha = el("li", { class: "linha linha-impl" }, [
+      el("div", { class: "linha-txt" }, [
+        el("b", {}, [b.clinica, s.ok ? el("span", { class: "selo-espera ok", texto: "Enviado" }) : null]),
+        el("span", { texto: s.texto + " · criado em " + dataHora(b.criado_em) }),
+      ]),
+      el("div", { class: "aprovacao" }, [
+        el("button", { type: "button", class: "botao-mini", texto: "Ver respostas", "aria-expanded": String(briefingAberto === b.id), onclick: function () {
+          respostas.hidden = !respostas.hidden; this.setAttribute("aria-expanded", String(!respostas.hidden));
+          briefingAberto = respostas.hidden ? null : b.id;
+          if (!respostas.hidden) desenharRespostas(respostas, b.respostas || {});
+        } }),
+        copiarLink, arquivar,
+      ]),
+      respostas,
+    ]);
+    return linha;
+  }
+  function desenharRespostas(alvo, r) {
+    alvo.innerHTML = "";
+    PERGUNTAS_BRIEFING.forEach(function (p, i) {
+      var campos = p.campos.filter(function (c) { return campoVisivel(c, r); });
+      alvo.appendChild(el("div", { class: "rot", texto: (i + 1) + ". " + p.titulo }));
+      alvo.appendChild(el("dl", { class: "respostas" }, campos.reduce(function (lista, c) {
+        var v = r[c.id], texto = Array.isArray(v) ? v.join(", ") : (v || "").trim();
+        return lista.concat([el("dt", { texto: c.rotulo }), el("dd", { class: texto ? "" : "sem", texto: texto || "sem resposta" })]);
+      }, [])));
+    });
   }
 
   function linhaImplantacao(imp, secao, clinicas) {

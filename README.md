@@ -82,6 +82,20 @@ Tudo o que é externo está isolado em `supabase/functions/_hospedagem.ts`, cham
 
 No front fica só a chave pública (publishable) do Supabase. Nenhum segredo neste repositório.
 
+## Briefing por link e chave de acesso (27/10/2026)
+
+- **Briefing:** na aba Clínicas › Briefings, "Novo briefing" cria um link `central.gestaosemcaos.com.br/briefing/#c=<código>`.
+  A clínica responde sem login (`site/briefing/`, perguntas em `fonte-central/perguntas-briefing.js`) e cada resposta é salva
+  na hora pela função pública `central-briefing`. Respostas na tabela `central_briefings` (só administradores leem). Ao enviar,
+  avisa os administradores por e-mail se o segredo `RESEND_API_KEY` existir nas funções. Mudar o id de um campo apaga a
+  resposta já dada: acrescente campos, não renomeie.
+- **Chave de acesso** (passkey, a peça dos portais): a tela de entrar não muda. O campo de e-mail oferece a chave guardada
+  no aparelho e, depois da senha, o navegador guarda uma sozinho. A parte **Segurança** (link no topo) troca a senha e cria
+  ou tira chaves. A função `central-chave-acesso` (SimpleWebAuthn) confere a chave e devolve um token de uso único, que a tela
+  troca por sessão em `/auth/v1/verify`. Guarda só a chave pública (`central_chaves`).
+- As duas funções aceitam só as origens da lista (`central.gestaosemcaos.com.br` e `localhost:8795` para testar; outras no
+  segredo `CENTRAL_CHAVE_ORIGENS`).
+
 ## Onde fica e como fica acordada
 
 - Repositórios `Notus-Agencia/central` (este) e `Notus-Agencia/bi-demo`, desde 24/10/2026; os endereços

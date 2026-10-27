@@ -239,8 +239,20 @@
     .chave-linha input { flex-basis: 100%; }
     .uso-kpi b { font-size: 21px; }
   }
+  /* briefings e segurança */
+  .form-linha { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 10px; margin: 4px 0 12px; }
+  .form-linha .campo { flex: 1 1 240px; margin: 0; }
+  .form-linha .erro { flex-basis: 100%; margin: 0; }
+  dl.respostas { margin: 0 0 14px; display: grid; gap: 2px 0; }
+  dl.respostas dt { font-size: 12px; font-weight: 600; color: var(--suave); margin-top: 6px; }
+  dl.respostas dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  dl.respostas dd.sem { color: var(--suave); font-style: italic; }
+  .quem .link + .link { margin-left: 2px; }
+  .detalhe-topo { flex-wrap: wrap; }
 </style>
 <script>window.__LOGO = {{LOGO_JSON}};</script>
+<script src="./webauthn-13.3.0.min.js" charset="utf-8"></script>
+<script src="./perguntas-briefing.js" charset="utf-8"></script>
 <script src="./central.js" charset="utf-8"></script>
 </head>
 <body>
