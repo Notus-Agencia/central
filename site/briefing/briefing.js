@@ -97,7 +97,9 @@
   var botaoPrincipal = null;
   function atualizarBotao() {
     if (!botaoPrincipal || atual < 0 || atual >= PERGUNTAS.length) return;
-    botaoPrincipal.textContent = respondida(PERGUNTAS[atual]) ? "Continuar" : "Pular por agora";
+    botaoPrincipal.innerHTML = "";
+    botaoPrincipal.appendChild(document.createTextNode(respondida(PERGUNTAS[atual]) ? "Continuar" : "Pular por agora"));
+    botaoPrincipal.appendChild(el("span", { class: "seta", "aria-hidden": "true", texto: "→" }));
   }
   // ── microfone: fala e o texto aparece escrito (reconhecimento de voz do próprio navegador; nada de áudio é guardado) ──
   var FALA = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -168,13 +170,13 @@
       var valor = respostas[c.id];
       if (c.tipo === "varias" && typeof valor === "string") valor = valor ? [valor] : []; // resposta antiga, de escolha única
       caixa = el("div", { class: "campo", role: c.tipo === "uma" ? "radiogroup" : "group", "aria-label": c.rotulo }, [
-        el("div", { class: "opcoes" }, c.opcoes.map(function (o, i) {
+        el("div", { class: "opcoes" + (c.opcoes.length >= 4 && c.opcoes.every(function (o) { return o.length <= 30; }) ? " duas-col" : ""), "data-letras": "1" }, c.opcoes.map(function (o, i) {
           var marcado = c.tipo === "uma" ? valor === o : Array.isArray(valor) && valor.indexOf(o) >= 0;
           var inp = el("input", { type: c.tipo === "uma" ? "radio" : "checkbox", name: id, value: o, id: id + "-" + i, checked: marcado, onchange: function () {
             if (c.tipo === "uma") mudar(c.id, o, 0);
             else mudar(c.id, Array.prototype.slice.call(document.querySelectorAll('input[name="' + id + '"]:checked')).map(function (x) { return x.value; }), 0);
           } });
-          return el("label", { class: "opcao" + (c.tipo === "varias" ? " varias" : ""), for: id + "-" + i }, [inp, el("span", { class: "marca", "aria-hidden": "true" }), el("span", { texto: o })]);
+          return el("label", { class: "opcao" + (c.tipo === "varias" ? " varias" : ""), for: id + "-" + i }, [inp, el("kbd", { class: "letra", "aria-hidden": "true", texto: String.fromCharCode(65 + i) }), el("span", { class: "txt", texto: o }), el("span", { class: "marca", "aria-hidden": "true" })]);
         })),
       ]);
       if (c.rotulo && PERGUNTAS[atual].campos.length > 1) caixa.insertBefore(el("span", { class: "rot", texto: c.rotulo }), caixa.firstChild);
@@ -206,7 +208,7 @@
     var n = PERGUNTAS.length, passo = atual >= 0 && atual < n ? (atual + 1) + " de " + n : "";
     var pct = atual < 0 ? 0 : atual >= n ? 100 : Math.round((atual / n) * 100);
     var t = el("div", {}, [
-      el("div", { class: "topo" }, [el("img", { src: escura ? "./logo-gsc-branco.png" : "./logo-gsc.png", alt: "Gestão Sem Caos" }), passo ? el("span", { class: "passo", texto: passo }) : null]),
+      el("div", { class: "topo" }, [el("img", { src: escura ? "./logo-gsc-branco.png" : "./logo-gsc.png", alt: "Gestão Sem Caos" }), null]),
       escura ? null : el("div", { class: "trilho", "aria-hidden": "true" }, [el("i", {})]),
     ]);
     if (!escura) requestAnimationFrame(function () { var i = t.querySelector(".trilho i"); if (i) i.style.width = pct + "%"; });
@@ -234,13 +236,13 @@
     salvoEl = el("span", { class: "salvo", "aria-live": "polite" });
     botaoPrincipal = el("button", { type: "button", class: "btn principal", onclick: function () { irPara(atual + 1); } });
     montar(false, [
-      el("span", { class: "eyebrow", texto: "Pergunta " + (atual + 1) }),
+      el("span", { class: "contador", "aria-label": "Pergunta " + (atual + 1) + " de " + PERGUNTAS.length }, [el("b", { texto: String(atual + 1).padStart(2, "0") }), " / " + String(PERGUNTAS.length).padStart(2, "0")]),
       el("h1", { texto: p.titulo }),
       p.porque ? el("p", { class: "sub", texto: p.porque }) : null,
       el("div", { class: "campos" }, p.campos.map(campo)),
     ], [
-      el("button", { type: "button", class: "btn ghost", texto: "Voltar", onclick: function () { irPara(atual - 1); } }),
-      salvoEl, el("span", { class: "dica" }, ["Enter ", el("kbd", { texto: "↵" })]), botaoPrincipal,
+      el("button", { type: "button", class: "btn ghost", onclick: function () { irPara(atual - 1); } }, [el("span", { class: "seta volta", "aria-hidden": "true", texto: "←" }), "Voltar"]),
+      salvoEl, el("span", { class: "dica" }, ["Enter ", el("kbd", { texto: "↵" }), p.campos.some(function (c) { return c.tipo === "uma" || c.tipo === "varias"; }) ? " · ou a letra da opção" : null]), botaoPrincipal,
     ]);
     atualizarBotao();
   }
@@ -295,6 +297,14 @@
     montar(false, [el("h1", { texto: titulo }), el("p", { class: "sub", texto: texto })], []);
   }
   document.addEventListener("keydown", function (ev) {
+    var alvo = ev.target, digitando = alvo && (alvo.tagName === "INPUT" && /text|email|tel/.test(alvo.type) || alvo.tagName === "TEXTAREA");
+    if (!digitando && !ev.metaKey && !ev.ctrlKey && !ev.altKey && /^[a-z]$/i.test(ev.key) && atual >= 0 && atual < PERGUNTAS.length) {
+      var grupos = Array.prototype.filter.call(document.querySelectorAll(".opcoes[data-letras]"), function (g) { return !g.closest("[hidden]"); });
+      if (grupos.length === 1) {
+        var op = grupos[0].querySelectorAll("label.opcao")[ev.key.toUpperCase().charCodeAt(0) - 65];
+        if (op) { ev.preventDefault(); op.click(); return; }
+      }
+    }
     if (ev.key !== "Enter" || atual < 0 || atual >= PERGUNTAS.length || !botaoPrincipal) return;
     var t = ev.target;
     if (t && t.tagName === "TEXTAREA" && !(ev.metaKey || ev.ctrlKey)) return;
