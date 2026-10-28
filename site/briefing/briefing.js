@@ -132,7 +132,7 @@
     });
     return area ? el("div", { class: "barra-mic" }, [dica, botao]) : botao;
   }
-  // ── tabela (equipe): linhas "função|pessoas|cargo novo", com "Adicionar função"; tirar linha pelo × ──
+  // ── tabela (equipe): linhas "função|pessoas|tempo da função", com "Adicionar função"; tirar linha pelo × ──
   function tabela(c) {
     var linhas = (Array.isArray(respostas[c.id]) ? respostas[c.id] : []).map(function (l) { return String(l).split("|"); });
     while (linhas.length < (c.linhas || 3)) linhas.push([]);

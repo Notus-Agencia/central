@@ -81,7 +81,7 @@ window.BRIEFING_PERGUNTAS = [
     id: "equipe", titulo: "Como é a equipe hoje?",
     porque: "Cada pessoa vai entrar no BI por um link de cadastro. Aqui basta dizer as funções e quantas pessoas há em cada uma.",
     campos: [{ id: "eq_tabela", tipo: "tabela", rotulo: "Equipe", linhas: 3,
-      colunas: [{ rotulo: "Função", exemplo: "Ex.: SDR" }, { rotulo: "Pessoas", exemplo: "2", numero: true }, { rotulo: "Cargo novo?", exemplo: "Ex.: 2 meses" }] }],
+      colunas: [{ rotulo: "Função", exemplo: "Ex.: SDR" }, { rotulo: "Pessoas", exemplo: "2", numero: true }, { rotulo: "Tempo da função", exemplo: "Ex.: 1 ano" }] }],
   },
   {
     id: "volume", titulo: "De cabeça, como é um mês normal da clínica?",
