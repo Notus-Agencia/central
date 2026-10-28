@@ -86,11 +86,61 @@
   };
   var TECLADO = { email: "email", telefone: "tel", data: "numeric", cep: "numeric", documento: "numeric", reais: "numeric", numero: "numeric" };
   var AUTO = { resp_nome: "name", resp_email: "email", resp_celular: "tel", cli_cep: "postal-code", cli_endereco: "street-address", cli_email_nota: "email" };
+  // ── validação: avisa embaixo do campo; nunca impede de seguir (nenhuma pergunta é obrigatória) ──
+  function cpfValido(d) {
+    if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
+    for (var t = 9; t < 11; t++) { var s = 0; for (var i = 0; i < t; i++) s += +d[i] * (t + 1 - i); if (+d[t] !== ((s * 10) % 11) % 10) return false; }
+    return true;
+  }
+  function cnpjValido(d) {
+    if (d.length !== 14 || /^(\d)\1+$/.test(d)) return false;
+    function dv(n) { var s = 0, p = n - 7; for (var i = 0; i < n; i++) { s += +d[i] * p--; if (p < 2) p = 9; } var r = s % 11; return r < 2 ? 0 : 11 - r; }
+    return dv(12) === +d[12] && dv(13) === +d[13];
+  }
+  var cepRuim = {};
+  function problema(c, v, completo) {
+    v = String(v || "").trim(); if (!v) return "";
+    var d = v.replace(/\D/g, "");
+    switch (c.tipo) {
+      case "nome": return /[0-9]/.test(v) ? "Nome não leva números." : completo && v.split(/\s+/).length < 2 ? "Escreva o nome e o sobrenome." : "";
+      case "email": return completo && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) ? "Confira o e-mail: está incompleto ou com algum erro." : "";
+      case "telefone":
+        if (d.length < 10) return completo ? "Faltam números: use o DDD e o número, ex.: (62) 99999-9999." : "";
+        if (+d.slice(0, 2) < 11) return "DDD inválido.";
+        if (d.length === 11 && d[2] !== "9") return "Celular com 11 números começa com 9 depois do DDD.";
+        return "";
+      case "data":
+        if (d.length < 8) return completo ? "Use dia, mês e ano: dd/mm/aaaa." : "";
+        var dd = +d.slice(0, 2), mm = +d.slice(2, 4), aa = +d.slice(4), dt = new Date(aa, mm - 1, dd);
+        if (dt.getFullYear() !== aa || dt.getMonth() !== mm - 1 || dt.getDate() !== dd) return "Essa data não existe.";
+        var idade = (Date.now() - dt) / 31557600000;
+        return idade < 16 || idade > 110 ? "Confira o ano de nascimento." : "";
+      case "cep": return d.length < 8 ? (completo ? "O CEP tem 8 números." : "") : cepRuim[d] ? "CEP não encontrado. Confira os números." : "";
+      case "documento":
+        if (d.length === 11) return cpfValido(d) ? "" : "CPF inválido. Confira os números.";
+        if (d.length === 14) return cnpjValido(d) ? "" : "CNPJ inválido. Confira os números.";
+        return completo ? (d.length < 11 ? "Faltam números: o CPF tem 11 e o CNPJ tem 14." : "Faltam números: o CNPJ tem 14.") : "";
+    }
+    return "";
+  }
+  function avisar(entrada, msg) {
+    var caixa = entrada.closest(".campo"), aviso = caixa && caixa.querySelector(".erro-campo");
+    if (!aviso && caixa) { aviso = el("span", { class: "erro-campo", role: "alert" }); caixa.appendChild(aviso); }
+    entrada.classList.toggle("invalido", !!msg);
+    entrada.setAttribute("aria-invalid", msg ? "true" : "false");
+    if (aviso) { aviso.textContent = msg || ""; aviso.hidden = !msg; }
+  }
+  function problemasDoBriefing() {
+    var lista = [];
+    PERGUNTAS.forEach(function (p, i) { p.campos.forEach(function (c) { if (visivel(c) && problema(c, respostas[c.id], true)) lista.push({ i: i, c: c }); }); });
+    return lista;
+  }
   // CEP preenche o endereço e a cidade, se estiverem vazios (ViaCEP recebe só o CEP)
   function buscarCep(cep) {
     var d = digitos(cep, 8); if (d.length !== 8) return;
     fetch("https://viacep.com.br/ws/" + d + "/json/").then(function (r) { return r.json(); }).then(function (e) {
-      if (!e || e.erro) return;
+      var campoCep = document.getElementById("c-cli_cep");
+      if (!e || e.erro) { cepRuim[d] = true; if (campoCep) avisar(campoCep, "CEP não encontrado. Confira os números."); return; }
       var end = document.getElementById("c-cli_endereco"), cid = document.getElementById("c-cli_cidade");
       if (end && !end.value.trim() && e.logradouro) { end.value = e.logradouro + ", "; mudar("cli_endereco", end.value); }
       if (cid && !cid.value.trim() && e.localidade) { cid.value = [e.bairro, e.localidade + " - " + e.uf].filter(Boolean).join(", "); mudar("cli_cidade", cid.value); }
@@ -194,12 +244,22 @@
         autocapitalize: c.tipo === "email" ? "none" : null, spellcheck: c.tipo === "email" ? "false" : null,
       });
       entrada.value = typeof respostas[c.id] === "string" ? respostas[c.id] : "";
+      var relogioAviso = null;
       entrada.addEventListener("input", function () {
+        var antes = entrada.value;
+        if (c.tipo === "nome") entrada.value = antes.replace(/[0-9]/g, "");
         if (MASCARA[c.tipo]) entrada.value = MASCARA[c.tipo](entrada.value);
+        // digitou algo que o campo não aceita (letra onde só vai número, número no nome): avisa por um instante
+        var tirou = c.tipo === "nome" ? /[0-9]/.test(antes) : MASCARA[c.tipo] && /[^\d\s()./\-R$]/.test(antes.replace(/R\$\s?/, ""));
+        if (tirou) {
+          avisar(entrada, c.tipo === "nome" ? "Nome não leva números." : "Use só números neste campo.");
+          clearTimeout(relogioAviso); relogioAviso = setTimeout(function () { avisar(entrada, problema(c, entrada.value, false)); }, 2500);
+        } else avisar(entrada, problema(c, entrada.value, false));
         mudar(c.id, entrada.value);
         if (c.tipo === "cep") buscarCep(entrada.value);
       });
-      entrada.addEventListener("blur", function () { clearTimeout(relogio); salvar(); });
+      entrada.addEventListener("blur", function () { avisar(entrada, problema(c, entrada.value, true)); clearTimeout(relogio); salvar(); });
+      if (entrada.value) setTimeout(function () { avisar(entrada, problema(c, entrada.value, true)); }, 0);
       var podeFalar = FALA && c.tipo === "texto"; // só nas respostas longas; nome, endereço e números a pessoa digita
       caixa = el("div", { class: "campo" }, [el("label", { class: "rot", for: id, texto: c.rotulo }), c.ajuda ? el("span", { class: "ajuda", texto: c.ajuda }) : null,
         podeFalar ? el("div", { class: "com-mic" + (area ? " area" : "") }, [entrada, microfone(entrada, c)]) : entrada]);
@@ -269,6 +329,7 @@
   }
   function revisar() {
     var n = feitas(), total = PERGUNTAS.length, faltam = PERGUNTAS.map(function (p, i) { return respondida(p) ? null : i; }).filter(function (x) { return x !== null; });
+    var erradas = problemasDoBriefing();
     salvoEl = el("span", { class: "salvo" });
     var enviar = el("button", { type: "button", class: "btn laranja principal", texto: enviadoEm ? "Enviar de novo" : "Enviar respostas", onclick: function () {
       enviar.disabled = true; enviar.textContent = "Enviando…";
@@ -284,6 +345,10 @@
       el("span", { class: "eyebrow", texto: "Tudo certo?" }),
       el("h1", { texto: n === total ? "Você respondeu todas as perguntas." : "Você respondeu " + n + " de " + total + "." }),
       el("p", { class: "sub", texto: n === total ? "Se quiser, volte e confira. Quando estiver bom, é só enviar." : "Pode enviar assim e completar na reunião, ou voltar às que ficaram em branco." }),
+      erradas.length ? el("div", { class: "campo" }, [el("span", { class: "rot", texto: "Confira estes dados" }), el("div", { class: "opcoes" }, erradas.map(function (x) {
+        return el("button", { type: "button", class: "opcao alerta", onclick: function () { doFim = true; irPara(x.i); } }, [el("span", { class: "marca", "aria-hidden": "true" }), el("span", { texto: x.c.rotulo + ": " + problema(x.c, respostas[x.c.id], true) })]);
+      }))]) : null,
+      faltam.length ? el("span", { class: "rot", texto: "Ficaram em branco" }) : null,
       faltam.length ? el("div", { class: "opcoes" }, faltam.map(function (i) {
         return el("button", { type: "button", class: "opcao", onclick: function () { doFim = true; irPara(i); } }, [el("span", { class: "marca", "aria-hidden": "true" }), el("span", { texto: PERGUNTAS[i].titulo })]);
       })) : null,

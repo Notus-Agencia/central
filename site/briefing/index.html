@@ -152,6 +152,10 @@
   .entrada::placeholder { color: var(--gray-2); }
   .entrada:hover { background: #EFEFF2; }
   .entrada:focus { background: #FFFFFF; border-color: var(--orange); box-shadow: 0 0 0 4px rgba(242, 118, 46, .12); }
+  .entrada.invalido, .entrada.invalido:focus { border-color: #C93A2E; background: #FFF6F5; box-shadow: 0 0 0 4px rgba(201, 58, 46, .10); }
+  .erro-campo { font-size: 14px; color: #B42318; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .erro-campo::before { content: "!"; width: 18px; height: 18px; border-radius: 50%; background: #B42318; color: #FFFFFF; font-size: 12px; font-weight: 700; display: grid; place-items: center; flex: none; }
+  .opcao.alerta { background: #FFF6F5; color: #B42318; }
   .opcoes.duas-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .opcao { gap: 12px; padding: 13px 16px 13px 12px; background: var(--panel); border-color: transparent; border-radius: 14px; }
   .opcao:hover { background: #EDEDF0; border-color: transparent; }

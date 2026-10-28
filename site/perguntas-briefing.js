@@ -4,7 +4,7 @@
 // Cada item é uma tela. Campo: { id, tipo, rotulo, opcoes?, ajuda?, mostrarSe? }
 //   tipo: "uma" (escolha uma) | "varias" (marque quantas quiser) | "texto" (linhas) | "curto" (uma linha)
 //         | "tabela" (linhas com as colunas de `colunas`; a resposta é uma lista "a|b|c", até 20 linhas)
-//         | "email" | "telefone" | "data" | "cep" | "documento" (CPF ou CNPJ) | "reais" (R$ inteiro) | "numero" (inteiro)
+//         | "email" | "telefone" | "data" | "cep" | "documento" (CPF ou CNPJ) | "reais" (R$ inteiro) | "numero" (inteiro) | "nome" (só letras)
 //   mostrarSe: { campo: "valor" | ["valor", …] } aparece só quando o outro campo tem um desses valores (numa escolha de várias, marcado).
 // Mudar o id de um campo apaga a resposta já dada nele: acrescente campos novos, não renomeie. Nada de preço, senha ou chave aqui.
 window.BRIEFING_PERGUNTAS = [
@@ -12,7 +12,7 @@ window.BRIEFING_PERGUNTAS = [
     id: "voce", titulo: "Primeiro, os seus dados",
     porque: "Para o cadastro e o contrato.",
     campos: [
-      { id: "resp_nome", tipo: "curto", rotulo: "Nome completo" },
+      { id: "resp_nome", tipo: "nome", rotulo: "Nome completo" },
       { id: "resp_email", tipo: "email", rotulo: "E-mail" },
       { id: "resp_celular", tipo: "telefone", rotulo: "Celular (WhatsApp)" },
       { id: "resp_nascimento", tipo: "data", rotulo: "Data de nascimento" },
