@@ -103,9 +103,14 @@
   var FALA = window.SpeechRecognition || window.webkitSpeechRecognition || null;
   var ouvindo = null;
   function microfone(entrada, c) {
+    var area = c.tipo === "texto";
+    var dica = area ? el("span", { class: "dica-mic", texto: "Toque no microfone para falar" }) : null;
     var botao = el("button", { type: "button", class: "mic", "aria-label": "Falar em vez de digitar", title: "Falar em vez de digitar" });
-    var rotulo = c.tipo === "texto" ? '<span>Falar</span>' : "";
-    botao.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6-3.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.91V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.59a6 6 0 0 0 5-5.91Z"/></svg>' + rotulo;
+    botao.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6-3.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.91V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.59a6 6 0 0 0 5-5.91Z"/></svg>';
+    function estado(on) {
+      botao.classList.toggle("on", on); botao.setAttribute("aria-label", on ? "Parar de ouvir" : "Falar em vez de digitar");
+      if (dica) { dica.textContent = on ? "Ouvindo… toque de novo para parar" : "Toque no microfone para falar"; dica.classList.toggle("on", on); }
+    }
     botao.addEventListener("click", function () {
       if (ouvindo) { ouvindo.parar(); return; }
       var rec = new FALA(), base = entrada.value, parado = false;
@@ -117,13 +122,13 @@
         entrada.value = junto.charAt(0).toUpperCase() + junto.slice(1);
         mudar(c.id, entrada.value);
       };
-      function fim() { if (parado) return; parado = true; ouvindo = null; botao.classList.remove("on"); botao.setAttribute("aria-label", "Falar em vez de digitar"); var t = botao.querySelector("span"); if (t) t.textContent = "Falar"; clearTimeout(relogio); salvar(); }
+      function fim() { if (parado) return; parado = true; ouvindo = null; estado(false); clearTimeout(relogio); salvar(); }
       rec.onend = fim; rec.onerror = fim;
       ouvindo = { parar: function () { try { rec.stop(); } catch (e) { fim(); } } };
-      botao.classList.add("on"); botao.setAttribute("aria-label", "Parar de ouvir"); var t = botao.querySelector("span"); if (t) t.textContent = "Ouvindo… toque para parar";
+      estado(true);
       try { rec.start(); } catch (e) { fim(); }
     });
-    return botao;
+    return area ? el("div", { class: "barra-mic" }, [dica, botao]) : botao;
   }
   // ── tabela (equipe): linhas "função|pessoas|cargo novo", com "Adicionar função"; tirar linha pelo × ──
   function tabela(c) {
@@ -207,16 +212,16 @@
     if (!escura) requestAnimationFrame(function () { var i = t.querySelector(".trilho i"); if (i) i.style.width = pct + "%"; });
     return t;
   }
-  function montar(escura, conteudo, rodape) {
-    folha.className = "folha" + (escura ? " escura" : "");
+  function montar(escura, conteudo, rodape, tipo) {
+    folha.className = "folha" + (escura ? " escura" : "") + (tipo ? " " + tipo : "");
     folha.innerHTML = "";
     var tela = el("section", { class: "tela" + (semMovimento ? "" : " entra"), "aria-live": "polite" }, conteudo);
     folha.appendChild(topo(escura));
     folha.appendChild(tela);
-    folha.appendChild(el("div", { class: "rodape" }, rodape));
-    var foco = tela.querySelector("input.entrada, textarea, input[type=radio], input[type=checkbox]");
+    if (rodape.length) folha.appendChild(el("div", { class: "rodape" }, rodape));
+    var foco = tela.querySelector("input.entrada, textarea, input[type=radio], input[type=checkbox], .btn.grande");
     var h = tela.querySelector("h1"); if (h) h.setAttribute("tabindex", "-1");
-    setTimeout(function () { if (foco && window.innerWidth > 640 && foco.classList.contains("entrada")) foco.focus(); else if (h) h.focus({ preventScroll: true }); }, semMovimento ? 0 : 60);
+    setTimeout(function () { if (foco && window.innerWidth > 640 && (foco.classList.contains("entrada") || foco.classList.contains("grande"))) foco.focus(); else if (h) h.focus({ preventScroll: true }); }, semMovimento ? 0 : 60);
     window.scrollTo(0, 0);
   }
   function irPara(i) {
@@ -243,18 +248,17 @@
   function abertura() {
     var comeco = feitas() > 0;
     montar(true, [
-      el("span", { class: "eyebrow", texto: "Implantação do BI · " + clinica }),
-      el("h1", { texto: "Olá! Vamos preparar o seu BI." }),
-      el("p", { class: "sub", texto: "São perguntas rápidas, uma de cada vez. O que o sistema da clínica já tem (procedimentos, valores, agendas) a gente lê sozinho. Não sabe alguma? Pode pular, a gente conversa na reunião." }),
+      el("span", { class: "selo", texto: "Briefing · " + clinica }),
+      el("h1", { texto: "Vamos preparar o BI da sua clínica" }),
+      el("p", { class: "sub", texto: "Perguntas rápidas, uma de cada vez. O que o sistema da clínica já tem, a gente lê sozinho. Não sabe alguma? Pode pular." }),
       el("div", { class: "meta" }, [
-        el("div", {}, [el("span", { texto: "Perguntas" }), el("b", { texto: String(PERGUNTAS.length) })]),
-        el("div", {}, [el("span", { texto: "Tempo" }), el("b", { texto: "uns 10 minutos" })]),
-        el("div", {}, [el("span", { texto: "Respostas" }), el("b", { texto: "salvas sozinhas" })]),
+        el("div", {}, [el("b", { texto: String(PERGUNTAS.length) }), el("span", { texto: "perguntas" })]),
+        el("div", {}, [el("b", { texto: "10 min" }), el("span", { texto: "mais ou menos" })]),
+        el("div", {}, [el("b", { texto: "Salva" }), el("span", { texto: "a cada resposta" })]),
       ]),
-      enviadoEm ? el("p", { class: "sub", texto: "Você já enviou em " + dia(enviadoEm) + ". Pode corrigir à vontade: a gente sempre vê a versão mais nova." }) : null,
-    ], [
-      el("button", { type: "button", class: "btn laranja principal", texto: comeco ? "Continuar de onde parei" : "Começar", onclick: function () { irPara(comeco ? Math.min(primeiraSemResposta(), PERGUNTAS.length) : 0); } }),
-    ]);
+      el("button", { type: "button", class: "btn laranja grande", texto: comeco ? "Continuar de onde parei" : "Começar", onclick: function () { irPara(comeco ? Math.min(primeiraSemResposta(), PERGUNTAS.length) : 0); } }),
+      enviadoEm ? el("p", { class: "nota-abertura", texto: "Você já enviou em " + dia(enviadoEm) + ". Pode corrigir à vontade: a gente sempre vê a versão mais nova." }) : null,
+    ], [], "abertura");
   }
   function revisar() {
     var n = feitas(), total = PERGUNTAS.length, faltam = PERGUNTAS.map(function (p, i) { return respondida(p) ? null : i; }).filter(function (x) { return x !== null; });

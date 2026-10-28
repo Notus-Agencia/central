@@ -78,14 +78,19 @@
   .opcao:has(input:checked) .marca::after { opacity: 1; }
   .opcao:has(input:focus-visible) { outline: 2px solid var(--orange); outline-offset: 2px; }
 
-  .com-mic { position: relative; }
-  .com-mic .entrada { padding-right: 52px; }
-  .mic { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border: 0; border-radius: 50%; background: var(--panel); color: var(--gray); display: grid; place-items: center; transition: background .2s, color .2s; }
-  .com-mic.area .mic { top: auto; bottom: 10px; transform: none; width: auto; height: 34px; border-radius: 999px; padding: 0 14px 0 10px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; background: var(--orange-soft); color: var(--orange-ink); }
-  .com-mic.area .entrada { padding-right: 16px; padding-bottom: 54px; }
-  .mic:hover { color: var(--ink); }
-  .mic.on { background: var(--orange); color: #FFFFFF; animation: ouvindo 1.4s ease-in-out infinite; }
-  @keyframes ouvindo { 50% { box-shadow: 0 0 0 6px rgba(242, 118, 46, .22); } }
+  /* microfone como no Claude: botão redondo escuro, bem à vista; no campo grande, uma barra com a dica embaixo */
+  .com-mic { display: flex; gap: 10px; align-items: center; }
+  .com-mic .entrada { flex: 1; min-width: 0; }
+  .com-mic.area { position: relative; display: block; }
+  .com-mic.area .entrada { padding-bottom: 64px; min-height: 150px; resize: none; }
+  .barra-mic { position: absolute; left: 1.5px; right: 1.5px; bottom: 1.5px; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; border-top: 1px solid var(--line); border-radius: 0 0 13px 13px; background: inherit; }
+  .dica-mic { font-size: 14px; color: var(--gray-2); flex: 1; min-width: 0; }
+  .dica-mic.on { color: var(--orange-ink); font-weight: 500; }
+  .mic { flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--ink); color: #FFFFFF; display: grid; place-items: center; transition: background .2s, transform .15s; }
+  .mic:hover { background: #2C2C2E; }
+  .mic:active { transform: scale(.94); }
+  .mic.on { background: var(--orange); animation: ouvindo 1.4s ease-in-out infinite; }
+  @keyframes ouvindo { 50% { box-shadow: 0 0 0 7px rgba(242, 118, 46, .22); } }
   .tabela .tabela-linha { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, .7fr) minmax(0, 1.2fr) 36px; gap: 8px; align-items: center; }
   .tabela .tabela-corpo { display: grid; gap: 8px; }
   .tabela .cabeca span { font-size: 13px; font-weight: 500; color: var(--gray); padding-left: 4px; }
@@ -93,6 +98,21 @@
   .tabela .tirar { width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: var(--gray-2); font-size: 20px; line-height: 1; }
   .tabela .tirar:hover { background: var(--panel); color: var(--ink); }
   .tabela .mais { justify-self: start; padding-left: 4px; color: var(--orange-ink); }
+  /* abertura: tudo no centro, igual para qualquer clínica; o nome do cliente só no selo */
+  .folha.abertura .topo { justify-content: center; padding-top: 36px; }
+  .folha.abertura .topo img { height: 24px; }
+  .folha.abertura .tela { justify-content: center; align-items: center; text-align: center; gap: 22px; padding: 32px 48px 72px; }
+  .folha.abertura h1 { font-size: 48px; max-width: 14ch; }
+  .folha.abertura .sub { margin-top: -6px; max-width: 44ch; font-size: 18px; }
+  .selo { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: #FFFFFF; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14); border-radius: 999px; padding: 7px 14px; }
+  .selo::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--orange); }
+  .folha.abertura .meta { justify-content: center; gap: 0; margin: 6px 0 4px; }
+  .folha.abertura .meta div { align-items: center; padding: 0 26px; gap: 2px; }
+  .folha.abertura .meta div + div { border-left: 1px solid rgba(255, 255, 255, .14); }
+  .folha.abertura .meta b { font-size: 22px; font-weight: 500; letter-spacing: -.02em; }
+  .folha.abertura .meta span { font-size: 13px; }
+  .btn.grande { padding: 16px 40px; font-size: 17px; margin-top: 6px; }
+  .nota-abertura { font-size: 14px; color: var(--navy-soft); max-width: 40ch; }
   .rodape { display: flex; align-items: center; gap: 12px; padding: 20px 64px 32px; }
   .rodape .salvo { font-size: 14px; color: var(--gray-2); display: inline-flex; align-items: center; gap: 7px; }
   .rodape .salvo.ok::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
@@ -121,6 +141,11 @@
     h1 { font-size: 30px; }
     .sub { font-size: 16px; }
     .duas { grid-template-columns: minmax(0, 1fr); }
+    .folha.abertura .tela { padding: 24px 20px 48px; }
+    .folha.abertura h1 { font-size: 34px; }
+    .folha.abertura .meta div { padding: 0 14px; }
+    .folha.abertura .meta b { font-size: 18px; }
+    .btn.grande { width: 100%; }
     .tabela .tabela-linha { grid-template-columns: minmax(0, 1.3fr) 64px minmax(0, 1fr) 32px; gap: 6px; }
     .tabela .entrada { padding: 11px 10px; }
     .entrada, .opcao { font-size: 16px; }
