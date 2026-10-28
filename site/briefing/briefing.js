@@ -194,7 +194,7 @@
         if (c.tipo === "cep") buscarCep(entrada.value);
       });
       entrada.addEventListener("blur", function () { clearTimeout(relogio); salvar(); });
-      var podeFalar = FALA && (c.tipo === "texto" || c.tipo === "curto");
+      var podeFalar = FALA && c.tipo === "texto"; // só nas respostas longas; nome, endereço e números a pessoa digita
       caixa = el("div", { class: "campo" }, [el("label", { class: "rot", for: id, texto: c.rotulo }), c.ajuda ? el("span", { class: "ajuda", texto: c.ajuda }) : null,
         podeFalar ? el("div", { class: "com-mic" + (area ? " area" : "") }, [entrada, microfone(entrada, c)]) : entrada]);
     }
