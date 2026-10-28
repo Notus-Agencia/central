@@ -99,6 +99,64 @@
     if (!botaoPrincipal || atual < 0 || atual >= PERGUNTAS.length) return;
     botaoPrincipal.textContent = respondida(PERGUNTAS[atual]) ? "Continuar" : "Pular por agora";
   }
+  // ── microfone: fala e o texto aparece escrito (reconhecimento de voz do próprio navegador; nada de áudio é guardado) ──
+  var FALA = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  var ouvindo = null;
+  function microfone(entrada, c) {
+    var botao = el("button", { type: "button", class: "mic", "aria-label": "Falar em vez de digitar", title: "Falar em vez de digitar" });
+    var rotulo = c.tipo === "texto" ? '<span>Falar</span>' : "";
+    botao.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 1 0-7 0v6A3.5 3.5 0 0 0 12 15Zm6-3.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.91V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.59a6 6 0 0 0 5-5.91Z"/></svg>' + rotulo;
+    botao.addEventListener("click", function () {
+      if (ouvindo) { ouvindo.parar(); return; }
+      var rec = new FALA(), base = entrada.value, parado = false;
+      rec.lang = "pt-BR"; rec.continuous = true; rec.interimResults = true;
+      rec.onresult = function (ev) {
+        var txt = "";
+        for (var i = 0; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
+        var junto = (base && txt ? base.replace(/\s*$/, " ") : base) + txt;
+        entrada.value = junto.charAt(0).toUpperCase() + junto.slice(1);
+        mudar(c.id, entrada.value);
+      };
+      function fim() { if (parado) return; parado = true; ouvindo = null; botao.classList.remove("on"); botao.setAttribute("aria-label", "Falar em vez de digitar"); var t = botao.querySelector("span"); if (t) t.textContent = "Falar"; clearTimeout(relogio); salvar(); }
+      rec.onend = fim; rec.onerror = fim;
+      ouvindo = { parar: function () { try { rec.stop(); } catch (e) { fim(); } } };
+      botao.classList.add("on"); botao.setAttribute("aria-label", "Parar de ouvir"); var t = botao.querySelector("span"); if (t) t.textContent = "Ouvindo… toque para parar";
+      try { rec.start(); } catch (e) { fim(); }
+    });
+    return botao;
+  }
+  // ── tabela (equipe): linhas "função|pessoas|cargo novo", com "Adicionar função"; tirar linha pelo × ──
+  function tabela(c) {
+    var linhas = (Array.isArray(respostas[c.id]) ? respostas[c.id] : []).map(function (l) { return String(l).split("|"); });
+    while (linhas.length < (c.linhas || 3)) linhas.push([]);
+    var corpo = el("div", { class: "tabela-corpo" });
+    function gravar() {
+      var v = linhas.map(function (l) { return c.colunas.map(function (_, i) { return (l[i] || "").replace(/\|/g, "/").trim(); }); })
+        .filter(function (l) { return l.some(Boolean); }).map(function (l) { return l.join("|"); });
+      mudar(c.id, v);
+    }
+    function desenhar() {
+      corpo.innerHTML = "";
+      linhas.forEach(function (l, n) {
+        corpo.appendChild(el("div", { class: "tabela-linha" }, c.colunas.map(function (col, i) {
+          var inp = el("input", { type: "text", class: "entrada", "aria-label": col.rotulo + " (linha " + (n + 1) + ")", placeholder: n === 0 ? col.exemplo || "" : "", inputmode: col.numero ? "numeric" : null, autocomplete: "off" });
+          inp.value = l[i] || "";
+          inp.addEventListener("input", function () { if (col.numero) inp.value = inp.value.replace(/\D/g, "").slice(0, 4); l[i] = inp.value; gravar(); });
+          inp.addEventListener("blur", function () { clearTimeout(relogio); salvar(); });
+          return inp;
+        }).concat([el("button", { type: "button", class: "tirar", "aria-label": "Tirar esta linha", texto: "×", onclick: function () {
+          linhas.splice(n, 1); if (!linhas.length) linhas.push([]); desenhar(); gravar();
+        } })])));
+      });
+    }
+    desenhar();
+    var cabeca = el("div", { class: "tabela-linha cabeca", "aria-hidden": "true" }, c.colunas.map(function (col) { return el("span", { texto: col.rotulo }); }).concat([el("span", {})]));
+    var mais = el("button", { type: "button", class: "btn ghost mais", texto: "+ Adicionar função", onclick: function () {
+      if (linhas.length >= 20) return;
+      linhas.push([]); desenhar(); var ins = corpo.querySelectorAll(".tabela-linha:last-child input"); if (ins[0]) ins[0].focus();
+    } });
+    return el("div", { class: "campo tabela", role: "group", "aria-label": c.rotulo }, [cabeca, corpo, mais]);
+  }
   function campo(c) {
     var id = "c-" + c.id, caixa;
     if (c.tipo === "uma" || c.tipo === "varias") {
@@ -115,6 +173,8 @@
         })),
       ]);
       if (c.rotulo && PERGUNTAS[atual].campos.length > 1) caixa.insertBefore(el("span", { class: "rot", texto: c.rotulo }), caixa.firstChild);
+    } else if (c.tipo === "tabela") {
+      caixa = tabela(c);
     } else {
       var area = c.tipo === "texto";
       var entrada = el(area ? "textarea" : "input", area ? { id: id, class: "entrada", rows: "4" } : {
@@ -129,7 +189,9 @@
         if (c.tipo === "cep") buscarCep(entrada.value);
       });
       entrada.addEventListener("blur", function () { clearTimeout(relogio); salvar(); });
-      caixa = el("label", { class: "campo", for: id }, [el("span", { class: "rot", texto: c.rotulo }), c.ajuda ? el("span", { class: "ajuda", texto: c.ajuda }) : null, entrada]);
+      var podeFalar = FALA && (c.tipo === "texto" || c.tipo === "curto");
+      caixa = el("div", { class: "campo" }, [el("label", { class: "rot", for: id, texto: c.rotulo }), c.ajuda ? el("span", { class: "ajuda", texto: c.ajuda }) : null,
+        podeFalar ? el("div", { class: "com-mic" + (area ? " area" : "") }, [entrada, microfone(entrada, c)]) : entrada]);
     }
     if (c.ajuda && (c.tipo === "uma" || c.tipo === "varias")) caixa.appendChild(el("span", { class: "ajuda", texto: c.ajuda }));
     if (c.mostrarSe) { caixa.setAttribute("data-mostrar-se", JSON.stringify(c)); caixa.hidden = !visivel(c); }

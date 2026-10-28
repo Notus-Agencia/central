@@ -3,6 +3,7 @@
 // Usadas pela página pública do briefing (briefing/) e pela Central, que mostra as respostas com os mesmos títulos.
 // Cada item é uma tela. Campo: { id, tipo, rotulo, opcoes?, ajuda?, mostrarSe? }
 //   tipo: "uma" (escolha uma) | "varias" (marque quantas quiser) | "texto" (linhas) | "curto" (uma linha)
+//         | "tabela" (linhas com as colunas de `colunas`; a resposta é uma lista "a|b|c", até 20 linhas)
 //         | "email" | "telefone" | "data" | "cep" | "documento" (CPF ou CNPJ)
 //   mostrarSe: { campo: "valor" | ["valor", …] } aparece só quando o outro campo tem um desses valores (numa escolha de várias, marcado).
 // Mudar o id de um campo apaga a resposta já dada nele: acrescente campos novos, não renomeie. Nada de preço, senha ou chave aqui.
@@ -52,6 +53,7 @@ window.BRIEFING_PERGUNTAS = [
     campos: [
       { id: "anu_faz", tipo: "uma", rotulo: "Anúncios", opcoes: ["Sim, todo mês", "De vez em quando", "Não anunciamos hoje"] },
       { id: "anu_onde", tipo: "varias", rotulo: "Onde", opcoes: ["Instagram e Facebook (Meta)", "Google", "Outro"], mostrarSe: { anu_faz: ["Sim, todo mês", "De vez em quando"] } },
+      { id: "anu_onde_outro", tipo: "curto", rotulo: "Onde mais?", mostrarSe: { anu_onde: "Outro" } },
       { id: "anu_valor", tipo: "curto", rotulo: "Quanto investe por mês, em média?", mostrarSe: { anu_faz: ["Sim, todo mês", "De vez em quando"] } },
       { id: "anu_criativos", tipo: "curto", rotulo: "Quantos criativos (artes ou vídeos) publica por mês?", mostrarSe: { anu_faz: ["Sim, todo mês", "De vez em quando"] } },
     ],
@@ -72,12 +74,14 @@ window.BRIEFING_PERGUNTAS = [
     campos: [
       { id: "reg_tudo", tipo: "uma", rotulo: "Lançamentos", opcoes: ["Sim, tudo", "Quase tudo", "Só uma parte", "Pouca coisa"] },
       { id: "reg_fora", tipo: "varias", rotulo: "O que costuma ficar de fora?", opcoes: ["Orçamentos", "Pagamentos", "Agendamentos e remarcações", "Faltas e cancelamentos", "Outro"], mostrarSe: { reg_tudo: ["Quase tudo", "Só uma parte", "Pouca coisa"] } },
+      { id: "reg_fora_outro", tipo: "curto", rotulo: "O que mais fica de fora?", mostrarSe: { reg_fora: "Outro" } },
     ],
   },
   {
     id: "equipe", titulo: "Como é a equipe hoje?",
     porque: "Cada pessoa vai entrar no BI por um link de cadastro. Aqui basta dizer as funções e quantas pessoas há em cada uma.",
-    campos: [{ id: "eq_quadro", tipo: "texto", rotulo: "Funções e quantas pessoas em cada uma", ajuda: "Do seu jeito. Ex.: 2 SDRs, 1 closer (cargo novo, há 2 meses), 2 na recepção, 1 enfermeira." }],
+    campos: [{ id: "eq_tabela", tipo: "tabela", rotulo: "Equipe", linhas: 3,
+      colunas: [{ rotulo: "Função", exemplo: "Ex.: SDR" }, { rotulo: "Pessoas", exemplo: "2", numero: true }, { rotulo: "Cargo novo?", exemplo: "Ex.: 2 meses" }] }],
   },
   {
     id: "volume", titulo: "De cabeça, como é um mês normal da clínica?",
@@ -98,10 +102,10 @@ window.BRIEFING_PERGUNTAS = [
     ],
   },
   {
-    id: "remuneracao", titulo: "A equipe tem remuneração variável?",
+    id: "remuneracao", titulo: "A equipe tem remuneração variável ou bônus?",
     porque: "Se tiver, o BI acompanha o andamento de cada pessoa no mês.",
     campos: [
-      { id: "bonus_tem", tipo: "uma", rotulo: "Bônus ou comissão", opcoes: ["Sim", "Não"] },
+      { id: "bonus_tem", tipo: "uma", rotulo: "Remuneração variável / bônus", opcoes: ["Sim", "Não"] },
       { id: "bonus_regra", tipo: "texto", rotulo: "Como funciona o modelo?", ajuda: "Quem recebe, por qual resultado e quanto.", mostrarSe: { bonus_tem: "Sim" } },
     ],
   },

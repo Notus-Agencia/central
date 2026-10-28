@@ -951,7 +951,7 @@
       var campos = p.campos.filter(function (c) { return campoVisivel(c, r); });
       alvo.appendChild(el("div", { class: "rot", texto: (i + 1) + ". " + p.titulo }));
       alvo.appendChild(el("dl", { class: "respostas" }, campos.reduce(function (lista, c) {
-        var v = r[c.id], texto = Array.isArray(v) ? v.join(", ") : (v || "").trim();
+        var v = r[c.id], texto = Array.isArray(v) ? (c.tipo === "tabela" ? v.map(function (l) { return String(l).split("|").filter(Boolean).join(" · "); }).join("\n") : v.join(", ")) : (v || "").trim();
         return lista.concat([el("dt", { texto: c.rotulo }), el("dd", { class: texto ? "" : "sem", texto: texto || "sem resposta" })]);
       }, [])));
     });
