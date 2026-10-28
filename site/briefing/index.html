@@ -111,6 +111,13 @@
   .folha.abertura .meta div + div { border-left: 1px solid rgba(255, 255, 255, .14); }
   .folha.abertura .meta b { font-size: 22px; font-weight: 500; letter-spacing: -.02em; }
   .folha.abertura .meta span { font-size: 13px; }
+  .folha.abertura .ok-grande { background: rgba(76, 200, 141, .16); }
+  .folha.abertura .ok-grande::after { border-color: #4CC88D; }
+  .proximos { list-style: none; counter-reset: p; margin: 6px 0 2px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: 100%; max-width: 620px; text-align: left; }
+  .proximos li { counter-increment: p; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+  .proximos li::before { content: counter(p); width: 26px; height: 26px; border-radius: 50%; background: var(--orange); color: #FFFFFF; font-size: 13px; font-weight: 500; display: grid; place-items: center; }
+  .proximos b { font-size: 16px; font-weight: 500; }
+  .proximos span { font-size: 14px; color: var(--navy-soft); line-height: 1.45; }
   .btn.grande { padding: 16px 40px; font-size: 17px; margin-top: 6px; }
   .nota-abertura { font-size: 14px; color: var(--navy-soft); max-width: 40ch; }
   .rodape { display: flex; align-items: center; gap: 12px; padding: 20px 64px 32px; }
@@ -180,6 +187,7 @@
     .folha.abertura .meta div { padding: 0 14px; }
     .folha.abertura .meta b { font-size: 18px; }
     .btn.grande { width: 100%; }
+    .proximos { grid-template-columns: minmax(0, 1fr); }
     .tabela .tabela-linha { grid-template-columns: minmax(0, 1.3fr) 64px minmax(0, 1fr) 32px; gap: 6px; }
     .tabela .entrada { padding: 11px 10px; }
     .entrada, .opcao { font-size: 16px; }

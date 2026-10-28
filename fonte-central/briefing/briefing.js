@@ -6,6 +6,8 @@
   var CHAVE_PUBLICA = "sb_publishable_xq34BKVIUMI-18n21-Cnmw_QE8vQvuF";
   var PERGUNTAS = window.BRIEFING_PERGUNTAS || [];
   var codigo = (location.hash.match(/[#&]c=([A-Za-z0-9_-]{24,64})/) || [])[1] || "";
+  var soVer = (location.hash.match(/[#&]tela=(fim)\b/) || [])[1] || ""; // #…&tela=fim abre direto a página final, só para ver
+  var doFim = false; // veio do resumo do fim para responder uma que faltou: ao terminar, volta para o fim
   var respostas = {}, pendentes = {}, relogio = null, salvando = false, enviadoEm = null, clinica = "";
   var atual = -1; // -1 = abertura; 0..n-1 = perguntas; n = enviar; n+1 = recebido
   var semMovimento = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -100,7 +102,7 @@
   function atualizarBotao() {
     if (!botaoPrincipal || atual < 0 || atual >= PERGUNTAS.length) return;
     botaoPrincipal.innerHTML = "";
-    botaoPrincipal.appendChild(document.createTextNode(respondida(PERGUNTAS[atual]) ? "Continuar" : "Pular por agora"));
+    botaoPrincipal.appendChild(document.createTextNode(doFim ? (respondida(PERGUNTAS[atual]) ? "Salvar e voltar ao fim" : "Voltar ao fim") : respondida(PERGUNTAS[atual]) ? "Continuar" : "Pular por agora"));
     botaoPrincipal.appendChild(el("span", { class: "seta", "aria-hidden": "true", texto: "→" }));
   }
   // ── microfone: fala e o texto aparece escrito (reconhecimento de voz do próprio navegador; nada de áudio é guardado) ──
@@ -232,18 +234,19 @@
     clearTimeout(relogio); salvar();
     atual = i;
     if (atual < 0) return abertura();
+    if (atual >= PERGUNTAS.length) doFim = false;
     if (atual >= PERGUNTAS.length + 1) return recebido();
     if (atual === PERGUNTAS.length) return revisar();
     var p = PERGUNTAS[atual];
     salvoEl = el("span", { class: "salvo", "aria-live": "polite" });
-    botaoPrincipal = el("button", { type: "button", class: "btn principal", onclick: function () { irPara(atual + 1); } });
+    botaoPrincipal = el("button", { type: "button", class: "btn principal", onclick: function () { irPara(doFim ? PERGUNTAS.length : atual + 1); } });
     montar(false, [
       el("span", { class: "contador", "aria-label": "Pergunta " + (atual + 1) + " de " + PERGUNTAS.length }, [el("b", { texto: String(atual + 1).padStart(2, "0") }), " / " + String(PERGUNTAS.length).padStart(2, "0")]),
       el("h1", { texto: p.titulo }),
       p.porque ? el("p", { class: "sub", texto: p.porque }) : null,
       el("div", { class: "campos" }, p.campos.map(campo)),
     ], [
-      el("button", { type: "button", class: "btn ghost", onclick: function () { irPara(atual - 1); } }, [el("span", { class: "seta volta", "aria-hidden": "true", texto: "←" }), "Voltar"]),
+      el("button", { type: "button", class: "btn ghost", onclick: function () { irPara(doFim ? PERGUNTAS.length : atual - 1); } }, [el("span", { class: "seta volta", "aria-hidden": "true", texto: "←" }), doFim ? "Voltar ao fim" : "Voltar"]),
       salvoEl, el("span", { class: "dica" }, ["Enter ", el("kbd", { texto: "↵" }), p.campos.some(function (c) { return c.tipo === "uma" || c.tipo === "varias"; }) ? " · ou a letra da opção" : null]), botaoPrincipal,
     ]);
     atualizarBotao();
@@ -281,19 +284,25 @@
       el("span", { class: "eyebrow", texto: "Tudo certo?" }),
       el("h1", { texto: n === total ? "Você respondeu todas as perguntas." : "Você respondeu " + n + " de " + total + "." }),
       el("p", { class: "sub", texto: n === total ? "Se quiser, volte e confira. Quando estiver bom, é só enviar." : "Pode enviar assim e completar na reunião, ou voltar às que ficaram em branco." }),
-      faltam.length ? el("div", { class: "opcoes" }, faltam.slice(0, 6).map(function (i) {
-        return el("button", { type: "button", class: "opcao", onclick: function () { irPara(i); } }, [el("span", { class: "marca", "aria-hidden": "true" }), el("span", { texto: PERGUNTAS[i].titulo })]);
+      faltam.length ? el("div", { class: "opcoes" }, faltam.map(function (i) {
+        return el("button", { type: "button", class: "opcao", onclick: function () { doFim = true; irPara(i); } }, [el("span", { class: "marca", "aria-hidden": "true" }), el("span", { texto: PERGUNTAS[i].titulo })]);
       })) : null,
     ], [
       el("button", { type: "button", class: "btn ghost", texto: "Voltar", onclick: function () { irPara(total - 1); } }), salvoEl, enviar,
     ]);
   }
   function recebido() {
-    montar(false, [
+    montar(true, [
       el("div", { class: "ok-grande", "aria-hidden": "true" }),
-      el("h1", { texto: "Recebemos as suas respostas. Obrigado!" }),
-      el("p", { class: "sub", texto: "A Gestão Sem Caos já pode preparar a implantação. Se lembrar de algo, é só abrir este mesmo link e corrigir." }),
-    ], [el("button", { type: "button", class: "btn ghost", texto: "Rever as respostas", onclick: function () { irPara(0); } })]);
+      el("h1", { texto: "Recebemos as suas respostas" }),
+      el("p", { class: "sub", texto: "Obrigado! Agora é com a gente. Se lembrar de algo, é só abrir este mesmo link e corrigir." }),
+      el("ol", { class: "proximos" }, [
+        el("li", {}, [el("b", { texto: "Leitura" }), el("span", { texto: "A Gestão Sem Caos lê as respostas e prepara a implantação." })]),
+        el("li", {}, [el("b", { texto: "Reunião" }), el("span", { texto: "Uma conversa de 1 hora para fechar os detalhes." })]),
+        el("li", {}, [el("b", { texto: "Seu BI" }), el("span", { texto: "Você e a equipe recebem o acesso para começar." })]),
+      ]),
+      el("button", { type: "button", class: "btn ghost", texto: "Rever as respostas", onclick: function () { irPara(0); } }),
+    ], [], "abertura");
   }
   function erro(titulo, texto) {
     montar(false, [el("h1", { texto: titulo }), el("p", { class: "sub", texto: texto })], []);
@@ -319,6 +328,6 @@
     if (!r.ok) { erro("Este link não abre", r.erro || "Peça um novo à Gestão Sem Caos."); return; }
     respostas = r.respostas || {}; enviadoEm = r.enviado_em || null; clinica = r.clinica;
     document.title = "Briefing · " + r.clinica;
-    abertura();
+    if (soVer === "fim") { atual = PERGUNTAS.length + 1; recebido(); } else abertura();
   }).catch(function () { erro("Sem conexão", "Não consegui abrir o briefing agora. Confira a internet e recarregue a página."); });
 })();
