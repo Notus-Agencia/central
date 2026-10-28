@@ -72,6 +72,8 @@
   // ── máscaras (só formatam o que a pessoa digita) ──
   function digitos(v, max) { return String(v || "").replace(/\D/g, "").slice(0, max); }
   var MASCARA = {
+    reais: function (v) { var d = digitos(v, 10).replace(/^0+(?=\d)/, ""); return d ? "R$ " + Number(d).toLocaleString("pt-BR") : ""; },
+    numero: function (v) { var d = digitos(v, 7).replace(/^0+(?=\d)/, ""); return d ? Number(d).toLocaleString("pt-BR") : ""; },
     telefone: function (v) { var d = digitos(v, 11); if (d.length <= 2) return d; if (d.length <= 6) return "(" + d.slice(0, 2) + ") " + d.slice(2);
       return "(" + d.slice(0, 2) + ") " + (d.length === 11 ? d.slice(2, 7) + "-" + d.slice(7) : d.slice(2, 6) + "-" + d.slice(6)); },
     data: function (v) { var d = digitos(v, 8); return d.length <= 2 ? d : d.length <= 4 ? d.slice(0, 2) + "/" + d.slice(2) : d.slice(0, 2) + "/" + d.slice(2, 4) + "/" + d.slice(4); },
@@ -80,7 +82,7 @@
       if (d.length <= 11) return d.replace(/^(\d{3})(\d)/, "$1.$2").replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1-$2");
       return d.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d)/, "$1-$2"); },
   };
-  var TECLADO = { email: "email", telefone: "tel", data: "numeric", cep: "numeric", documento: "numeric" };
+  var TECLADO = { email: "email", telefone: "tel", data: "numeric", cep: "numeric", documento: "numeric", reais: "numeric", numero: "numeric" };
   var AUTO = { resp_nome: "name", resp_email: "email", resp_celular: "tel", cli_cep: "postal-code", cli_endereco: "street-address", cli_email_nota: "email" };
   // CEP preenche o endereço e a cidade, se estiverem vazios (ViaCEP recebe só o CEP)
   function buscarCep(cep) {
@@ -186,7 +188,7 @@
       var area = c.tipo === "texto";
       var entrada = el(area ? "textarea" : "input", area ? { id: id, class: "entrada", rows: "4" } : {
         id: id, class: "entrada", type: c.tipo === "email" ? "email" : c.tipo === "telefone" ? "tel" : "text",
-        inputmode: TECLADO[c.tipo] || null, autocomplete: AUTO[c.id] || "off", placeholder: c.tipo === "data" ? "dd/mm/aaaa" : c.tipo === "cep" ? "00000-000" : null,
+        inputmode: TECLADO[c.tipo] || null, autocomplete: AUTO[c.id] || "off", placeholder: c.tipo === "data" ? "dd/mm/aaaa" : c.tipo === "cep" ? "00000-000" : c.tipo === "reais" ? "R$ 0" : c.tipo === "numero" ? "0" : null,
         autocapitalize: c.tipo === "email" ? "none" : null, spellcheck: c.tipo === "email" ? "false" : null,
       });
       entrada.value = typeof respostas[c.id] === "string" ? respostas[c.id] : "";

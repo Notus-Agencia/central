@@ -4,7 +4,7 @@
 // Cada item é uma tela. Campo: { id, tipo, rotulo, opcoes?, ajuda?, mostrarSe? }
 //   tipo: "uma" (escolha uma) | "varias" (marque quantas quiser) | "texto" (linhas) | "curto" (uma linha)
 //         | "tabela" (linhas com as colunas de `colunas`; a resposta é uma lista "a|b|c", até 20 linhas)
-//         | "email" | "telefone" | "data" | "cep" | "documento" (CPF ou CNPJ)
+//         | "email" | "telefone" | "data" | "cep" | "documento" (CPF ou CNPJ) | "reais" (R$ inteiro) | "numero" (inteiro)
 //   mostrarSe: { campo: "valor" | ["valor", …] } aparece só quando o outro campo tem um desses valores (numa escolha de várias, marcado).
 // Mudar o id de um campo apaga a resposta já dada nele: acrescente campos novos, não renomeie. Nada de preço, senha ou chave aqui.
 window.BRIEFING_PERGUNTAS = [
@@ -54,8 +54,8 @@ window.BRIEFING_PERGUNTAS = [
       { id: "anu_faz", tipo: "uma", rotulo: "Anúncios", opcoes: ["Sim, todo mês", "De vez em quando", "Não anunciamos hoje"] },
       { id: "anu_onde", tipo: "varias", rotulo: "Onde", opcoes: ["Instagram e Facebook (Meta)", "Google", "Outro"], mostrarSe: { anu_faz: ["Sim, todo mês", "De vez em quando"] } },
       { id: "anu_onde_outro", tipo: "curto", rotulo: "Onde mais?", mostrarSe: { anu_onde: "Outro" } },
-      { id: "anu_valor", tipo: "curto", rotulo: "Quanto investe por mês, em média?", mostrarSe: { anu_faz: ["Sim, todo mês", "De vez em quando"] } },
-      { id: "anu_criativos", tipo: "curto", rotulo: "Quantos criativos (artes ou vídeos) publica por mês?", mostrarSe: { anu_faz: ["Sim, todo mês", "De vez em quando"] } },
+      { id: "anu_valor", tipo: "reais", rotulo: "Quanto investe por mês, em média?", mostrarSe: { anu_faz: ["Sim, todo mês", "De vez em quando"] } },
+      { id: "anu_criativos", tipo: "numero", rotulo: "Quantos criativos (artes ou vídeos) publica por mês?", mostrarSe: { anu_faz: ["Sim, todo mês", "De vez em quando"] } },
     ],
   },
   {
@@ -87,9 +87,9 @@ window.BRIEFING_PERGUNTAS = [
     id: "volume", titulo: "De cabeça, como é um mês normal da clínica?",
     porque: "Na primeira semana a gente compara com o que o BI mostrar. Ajuda a ver se o número que você tem de cabeça bate com o sistema. Pode ser aproximado.",
     campos: [
-      { id: "vol_faturamento", tipo: "curto", rotulo: "Faturamento por mês" },
-      { id: "vol_leads", tipo: "curto", rotulo: "Contatos novos (leads) por mês" },
-      { id: "vol_novos", tipo: "curto", rotulo: "Pacientes novos por mês" },
+      { id: "vol_faturamento", tipo: "reais", rotulo: "Faturamento por mês" },
+      { id: "vol_leads", tipo: "numero", rotulo: "Contatos novos (leads) por mês" },
+      { id: "vol_novos", tipo: "numero", rotulo: "Pacientes novos por mês" },
     ],
   },
   {
@@ -98,7 +98,7 @@ window.BRIEFING_PERGUNTAS = [
     campos: [
       { id: "meta_faz", tipo: "uma", rotulo: "Metas mensais", opcoes: ["Sim, todo mês", "Às vezes", "Não"] },
       { id: "meta_como", tipo: "texto", rotulo: "Como você define a meta do mês?", ajuda: "Ex.: pelo mesmo mês do ano passado mais 10%.", mostrarSe: { meta_faz: ["Sim, todo mês", "Às vezes"] } },
-      { id: "meta_faturamento", tipo: "curto", rotulo: "Qual a meta de faturamento deste mês?", mostrarSe: { meta_faz: ["Sim, todo mês", "Às vezes"] } },
+      { id: "meta_faturamento", tipo: "reais", rotulo: "Qual a meta de faturamento deste mês?", mostrarSe: { meta_faz: ["Sim, todo mês", "Às vezes"] } },
     ],
   },
   {
