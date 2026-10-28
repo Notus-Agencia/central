@@ -4,7 +4,7 @@
 // Cada item é uma tela. Campo: { id, tipo, rotulo, opcoes?, ajuda?, mostrarSe? }
 //   tipo: "uma" (escolha uma) | "varias" (marque quantas quiser) | "texto" (linhas) | "curto" (uma linha)
 //         | "email" | "telefone" | "data" | "cep" | "documento" (CPF ou CNPJ)
-//   mostrarSe: { campo: "valor" } aparece só quando o outro campo tem aquele valor (numa escolha de várias, quando está marcado).
+//   mostrarSe: { campo: "valor" | ["valor", …] } aparece só quando o outro campo tem um desses valores (numa escolha de várias, marcado).
 // Mudar o id de um campo apaga a resposta já dada nele: acrescente campos novos, não renomeie. Nada de preço, senha ou chave aqui.
 window.BRIEFING_PERGUNTAS = [
   {
@@ -47,13 +47,19 @@ window.BRIEFING_PERGUNTAS = [
     ],
   },
   {
-    id: "sistemas_outros", titulo: "Que outras ferramentas fazem parte do dia a dia?",
-    porque: "Anúncios e termos também viram números no BI. Marque todas.",
+    id: "anuncios", titulo: "A clínica faz anúncios?",
+    porque: "O BI mostra quanto cada anúncio traz de paciente e de faturamento.",
     campos: [
-      { id: "s_anuncios", tipo: "varias", rotulo: "Anúncios", opcoes: ["Meta (Instagram e Facebook) todo mês", "Meta de vez em quando", "Google", "Não anunciamos hoje"] },
-      { id: "s_termos", tipo: "varias", rotulo: "Termo de consentimento", opcoes: ["ZapSign", "Outro sistema de assinatura", "No papel", "Não usamos"] },
-      { id: "s_outros", tipo: "curto", rotulo: "Mais alguma? Qual?", ajuda: "Ex.: um sistema de estoque, de cashback ou de pesquisa de satisfação." },
+      { id: "anu_faz", tipo: "uma", rotulo: "Anúncios", opcoes: ["Sim, todo mês", "De vez em quando", "Não anunciamos hoje"] },
+      { id: "anu_onde", tipo: "varias", rotulo: "Onde", opcoes: ["Instagram e Facebook (Meta)", "Google", "Outro"], mostrarSe: { anu_faz: ["Sim, todo mês", "De vez em quando"] } },
+      { id: "anu_valor", tipo: "curto", rotulo: "Quanto investe por mês, em média?", mostrarSe: { anu_faz: ["Sim, todo mês", "De vez em quando"] } },
+      { id: "anu_criativos", tipo: "curto", rotulo: "Quantos criativos (artes ou vídeos) publica por mês?", mostrarSe: { anu_faz: ["Sim, todo mês", "De vez em quando"] } },
     ],
+  },
+  {
+    id: "ferramentas", titulo: "Que outras ferramentas a clínica usa?",
+    porque: "Assim a gente sabe o que mais pode virar número no BI.",
+    campos: [{ id: "s_outros", tipo: "texto", rotulo: "Ferramentas e para que servem", ajuda: "Ex.: um sistema de estoque, de cashback, de pesquisa de satisfação ou de assinatura de documentos." }],
   },
   {
     id: "admins", titulo: "Quem tem o login de administrador de cada sistema?",
@@ -61,39 +67,42 @@ window.BRIEFING_PERGUNTAS = [
     campos: [{ id: "s_admin", tipo: "texto", rotulo: "Sistema e quem é o administrador", ajuda: "Ex.: GestãoDS, eu; Kommo, a gerente; Meta, a agência." }],
   },
   {
-    id: "registro", titulo: "O que a equipe registra no sistema hoje?",
-    porque: "O BI só mostra o que está registrado. Isso diz o que dá para confiar desde o primeiro dia e o que ajustar no treinamento.",
+    id: "registro", titulo: "Tudo o que acontece na clínica é lançado no sistema?",
+    porque: "O BI só mostra o que está no sistema. Isso diz em que dá para confiar desde o primeiro dia e o que ajustar no treinamento.",
     campos: [
-      { id: "reg_orcamento", tipo: "uma", rotulo: "Todo orçamento passado na consulta é lançado no sistema", opcoes: ["Sempre", "Quase sempre", "Às vezes", "Não"] },
-      { id: "reg_pagamento", tipo: "uma", rotulo: "Todo pagamento é lançado no financeiro do sistema", opcoes: ["Sempre", "Quase sempre", "Às vezes", "Não"] },
-      { id: "reg_origem", tipo: "uma", rotulo: "A equipe anota de onde veio cada paciente novo (anúncio, indicação, Instagram…)", opcoes: ["Sempre", "Às vezes", "Não"] },
-      { id: "reg_agendas", tipo: "uma", rotulo: "Todos os profissionais têm agenda própria no sistema", opcoes: ["Sim, todos", "Alguns não", "Não sei"] },
+      { id: "reg_tudo", tipo: "uma", rotulo: "Lançamentos", opcoes: ["Sim, tudo", "Quase tudo", "Só uma parte", "Pouca coisa"] },
+      { id: "reg_fora", tipo: "varias", rotulo: "O que costuma ficar de fora?", opcoes: ["Orçamentos", "Pagamentos", "Agendamentos e remarcações", "Faltas e cancelamentos", "Outro"], mostrarSe: { reg_tudo: ["Quase tudo", "Só uma parte", "Pouca coisa"] } },
     ],
   },
   {
-    id: "equipe", titulo: "Quem faz o quê na equipe?",
-    porque: "Cada pessoa ganha acesso ao BI e uma página com o trabalho da função dela. Marque as funções que existem.",
-    campos: [
-      { id: "eq_funcoes", tipo: "varias", rotulo: "Funções", opcoes: ["SDR (primeiro atendimento do lead)", "Closer ou concierge (fecha o orçamento)", "Recepção", "Auxiliar ou enfermagem", "Marketing", "Gerente ou gestão", "Agência ou gestor de tráfego de fora"] },
-      { id: "eq_pessoas", tipo: "texto", rotulo: "Nome e função de cada pessoa que vai usar o BI", ajuda: "Os e-mails podem vir depois." },
-    ],
+    id: "equipe", titulo: "Como é a equipe hoje?",
+    porque: "Cada pessoa vai entrar no BI por um link de cadastro. Aqui basta dizer as funções e quantas pessoas há em cada uma.",
+    campos: [{ id: "eq_quadro", tipo: "texto", rotulo: "Funções e quantas pessoas em cada uma", ajuda: "Do seu jeito. Ex.: 2 SDRs, 1 closer (cargo novo, há 2 meses), 2 na recepção, 1 enfermeira." }],
   },
   {
-    id: "volume", titulo: "Como é um mês típico da clínica?",
-    porque: "Serve de base para conferir os números do BI na primeira semana. Pode ser aproximado.",
+    id: "volume", titulo: "De cabeça, como é um mês normal da clínica?",
+    porque: "Na primeira semana a gente compara com o que o BI mostrar. Ajuda a ver se o número que você tem de cabeça bate com o sistema. Pode ser aproximado.",
     campos: [
-      { id: "vol_faturamento", tipo: "curto", rotulo: "Faturamento de um mês normal" },
+      { id: "vol_faturamento", tipo: "curto", rotulo: "Faturamento por mês" },
       { id: "vol_leads", tipo: "curto", rotulo: "Contatos novos (leads) por mês" },
       { id: "vol_novos", tipo: "curto", rotulo: "Pacientes novos por mês" },
     ],
   },
   {
-    id: "metas", titulo: "Quais são as metas?",
-    porque: "A meta aparece todo dia no BI e é a base das previsões e das sugestões.",
+    id: "metas", titulo: "Você define metas para o mês?",
+    porque: "A meta aparece todo dia no BI e é a base das previsões.",
     campos: [
-      { id: "meta_faturamento", tipo: "texto", rotulo: "Meta de faturamento por mês", ajuda: "Se ainda não tiver, escreva \"não tenho\": a gente sugere uma pelo histórico." },
-      { id: "bonus_tem", tipo: "uma", rotulo: "A equipe tem metas e bônus?", opcoes: ["Sim", "Não", "Queremos começar"] },
-      { id: "bonus_regra", tipo: "texto", rotulo: "Como funciona para cada função?", mostrarSe: { bonus_tem: "Sim" } },
+      { id: "meta_faz", tipo: "uma", rotulo: "Metas mensais", opcoes: ["Sim, todo mês", "Às vezes", "Não"] },
+      { id: "meta_como", tipo: "texto", rotulo: "Como você define a meta do mês?", ajuda: "Ex.: pelo mesmo mês do ano passado mais 10%.", mostrarSe: { meta_faz: ["Sim, todo mês", "Às vezes"] } },
+      { id: "meta_faturamento", tipo: "curto", rotulo: "Qual a meta de faturamento deste mês?", mostrarSe: { meta_faz: ["Sim, todo mês", "Às vezes"] } },
+    ],
+  },
+  {
+    id: "remuneracao", titulo: "A equipe tem remuneração variável?",
+    porque: "Se tiver, o BI acompanha o andamento de cada pessoa no mês.",
+    campos: [
+      { id: "bonus_tem", tipo: "uma", rotulo: "Bônus ou comissão", opcoes: ["Sim", "Não"] },
+      { id: "bonus_regra", tipo: "texto", rotulo: "Como funciona o modelo?", ajuda: "Quem recebe, por qual resultado e quanto.", mostrarSe: { bonus_tem: "Sim" } },
     ],
   },
   {
@@ -102,15 +111,17 @@ window.BRIEFING_PERGUNTAS = [
     campos: [
       { id: "dores", tipo: "varias", rotulo: "Dificuldades", opcoes: [
         "Só sei o faturamento quando o mês fecha", "Leads ficam sem resposta", "Muitas faltas e cancelamentos", "Orçamentos que não fecham",
-        "Não sei se o anúncio dá retorno", "Pacientes que não voltam", "A equipe não tem meta clara", "Horários vazios na agenda", "Outra",
+        "Não sei se o anúncio dá retorno", "Pacientes que não voltam", "A equipe não tem meta clara", "Horários vazios na agenda",
       ] },
-      { id: "dores_outra", tipo: "curto", rotulo: "Qual outra?", mostrarSe: { dores: "Outra" } },
     ],
   },
   {
-    id: "enxergar", titulo: "O que você quer enxergar todo dia?",
+    id: "enxergar", titulo: "O que é difícil de enxergar hoje?",
     porque: "Define a primeira tela que você vai abrir de manhã.",
-    campos: [{ id: "enxergar", tipo: "texto", rotulo: "O que você gostaria de saber todo dia ao abrir o BI e hoje não sabe?" }],
+    campos: [
+      { id: "dificil", tipo: "texto", rotulo: "Qual é a informação mais difícil de ver hoje na clínica?" },
+      { id: "enxergar", tipo: "texto", rotulo: "O que você gostaria de ver com facilidade, todo dia ou toda semana?" },
+    ],
   },
   {
     id: "sucesso", titulo: "Daqui a 3 meses, o que faria você dizer que valeu a pena?",

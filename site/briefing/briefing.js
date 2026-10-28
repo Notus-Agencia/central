@@ -36,8 +36,8 @@
   function visivel(c) {
     if (!c.mostrarSe) return true;
     return Object.keys(c.mostrarSe).every(function (k) {
-      var v = respostas[k], quer = c.mostrarSe[k];
-      return Array.isArray(v) ? v.indexOf(quer) >= 0 : v === quer;
+      var v = respostas[k], quer = [].concat(c.mostrarSe[k]);
+      return quer.some(function (q) { return Array.isArray(v) ? v.indexOf(q) >= 0 : v === q; });
     });
   }
   function respondida(p) { return p.campos.some(function (c) { return visivel(c) && temValor(respostas[c.id]); }); }

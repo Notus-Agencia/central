@@ -876,7 +876,7 @@
   function linkBriefing(b) { return location.origin + "/briefing/#c=" + b.codigo; }
   function temValor(v) { return Array.isArray(v) ? v.length > 0 : !!(v && String(v).trim()); }
   function campoVisivel(c, r) {
-    return !c.mostrarSe || Object.keys(c.mostrarSe).every(function (k) { var v = r[k]; return Array.isArray(v) ? v.indexOf(c.mostrarSe[k]) >= 0 : v === c.mostrarSe[k]; });
+    return !c.mostrarSe || Object.keys(c.mostrarSe).every(function (k) { var v = r[k]; return [].concat(c.mostrarSe[k]).some(function (q) { return Array.isArray(v) ? v.indexOf(q) >= 0 : v === q; }); });
   }
   function respondidas(r) {
     return PERGUNTAS_BRIEFING.filter(function (p) { return p.campos.some(function (c) { return campoVisivel(c, r) && temValor(r[c.id]); }); }).length;
